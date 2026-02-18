@@ -6,6 +6,7 @@ class Card {
         this.rank = rank;
         this.value = this.getValue(rank);
         this.color = (suit === 'hearts' || suit === 'diamonds') ? 'red' : 'black';
+        this.id = `${suit}-${rank}`;
         this.element = null;
     }
 
@@ -21,6 +22,7 @@ class Card {
         el.dataset.suit = this.suit;
         el.dataset.rank = this.rank;
         el.dataset.value = this.value;
+        el.dataset.cardId = this.id;
         this.element = el;
         return el;
     }
@@ -66,13 +68,17 @@ class FreecellGame {
     }
 
     dealCards() {
-        let cardIndex = 0;
+        // Pop cards off the shuffled deck into tableau columns so the
+        // deck no longer holds references to dealt cards.
         for (let col = 0; col < 8; col++) {
             const numCards = col < 4 ? 7 : 6;
             for (let i = 0; i < numCards; i++) {
-                this.tableau[col].push(this.deck[cardIndex++]);
+                const card = this.deck.pop();
+                this.tableau[col].push(card);
             }
         }
+        // Clear any remaining references in the deck
+        this.deck = [];
     }
 
     render() {
@@ -166,9 +172,10 @@ class FreecellGame {
             value: parseInt(this.draggedCard.dataset.value)
         };
 
-        // Check if move is valid
+        // Check if move is valid using the same card info as before
         if (this.isValidMove(source, dest, cardData)) {
-            this.moveCard(source, dest, cardData);
+            const cardId = this.draggedCard.dataset.cardId;
+            this.moveCard(source, dest, cardId);
             this.render();
             if (this.checkWin()) {
                 alert('You win!');
@@ -206,35 +213,74 @@ class FreecellGame {
         return false;
     }
 
-    moveCard(source, dest, cardData) {
-        // Remove from source
+    moveCard(source, dest, cardId) {
+        // Move the actual Card instance(s) from source arrays to destination arrays
+        // Find and remove from the correct source array
         if (source.classList.contains('cell')) {
             const index = ['free1', 'free2', 'free3', 'free4'].indexOf(source.id);
-            this.freeCells[index].pop();
+            const arr = this.freeCells[index];
+            const i = arr.findIndex(c => c.id === cardId);
+            if (i === -1) return;
+            const card = arr.splice(i, 1)[0];
+            const destIndex = ['free1', 'free2', 'free3', 'free4'].indexOf(dest.id);
+            if (dest.classList.contains('cell')) {
+                this.freeCells[destIndex].push(card);
+            } else if (dest.classList.contains('foundation')) {
+                const fIndex = ['found1', 'found2', 'found3', 'found4'].indexOf(dest.id);
+                this.foundations[fIndex].push(card);
+            } else if (dest.classList.contains('column')) {
+                const tIndex = parseInt(dest.id.slice(3)) - 1;
+                this.tableau[tIndex].push(card);
+            }
+            return;
         } else if (source.classList.contains('foundation')) {
             const index = ['found1', 'found2', 'found3', 'found4'].indexOf(source.id);
-            this.foundations[index].pop();
+            const arr = this.foundations[index];
+            const i = arr.findIndex(c => c.id === cardId);
+            if (i === -1) return;
+            const card = arr.splice(i, 1)[0];
+            if (dest.classList.contains('cell')) {
+                const destIndex = ['free1', 'free2', 'free3', 'free4'].indexOf(dest.id);
+                this.freeCells[destIndex].push(card);
+            } else if (dest.classList.contains('foundation')) {
+                const fIndex = ['found1', 'found2', 'found3', 'found4'].indexOf(dest.id);
+                this.foundations[fIndex].push(card);
+            } else if (dest.classList.contains('column')) {
+                const tIndex = parseInt(dest.id.slice(3)) - 1;
+                this.tableau[tIndex].push(card);
+            }
+            return;
         } else if (source.classList.contains('column')) {
             const index = parseInt(source.id.slice(3)) - 1;
-            this.tableau[index].pop();
-        }
-
-        // Add to dest
-        const card = new Card(cardData.suit, cardData.rank);
-        if (dest.classList.contains('cell')) {
-            const index = ['free1', 'free2', 'free3', 'free4'].indexOf(dest.id);
-            this.freeCells[index].push(card);
-        } else if (dest.classList.contains('foundation')) {
-            const index = ['found1', 'found2', 'found3', 'found4'].indexOf(dest.id);
-            this.foundations[index].push(card);
-        } else if (dest.classList.contains('column')) {
-            const index = parseInt(dest.id.slice(3)) - 1;
-            this.tableau[index].push(card);
+            const arr = this.tableau[index];
+            const startIdx = arr.findIndex(c => c.id === cardId);
+            if (startIdx === -1) return;
+            // Remove the sequence from startIdx to end (support moving stacks)
+            const moving = arr.splice(startIdx);
+            if (dest.classList.contains('column')) {
+                const destIndex = parseInt(dest.id.slice(3)) - 1;
+                this.tableau[destIndex].push(...moving);
+            } else if (dest.classList.contains('cell')) {
+                const destIndex = ['free1', 'free2', 'free3', 'free4'].indexOf(dest.id);
+                if (moving.length === 1) this.freeCells[destIndex].push(moving[0]);
+            } else if (dest.classList.contains('foundation')) {
+                const fIndex = ['found1', 'found2', 'found3', 'found4'].indexOf(dest.id);
+                if (moving.length === 1) this.foundations[fIndex].push(moving[0]);
+            }
+            return;
         }
     }
 
     checkWin() {
         return this.foundations.every(f => f.length === 13);
+    }
+
+    resetGame() {
+        this.deck = [];
+        this.freeCells = [[], [], [], []];
+        this.foundations = [[], [], [], []];
+        this.tableau = [[], [], [], [], [], [], [], []];
+        this.init();
     }
 
     registerServiceWorker() {
