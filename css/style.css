@@ -100,9 +100,40 @@ body {
     }
     .card {
         width: 40px;
-        height: 56px;
+        height: 56px; /* maintain aspect ratio 1.4:1 */
         font-size: 10px;
     }
+}
+
+/* Card corner layout */
+.card .corner {
+    position: absolute;
+    font-size: 11px;
+    line-height: 1;
+    font-weight: bold;
+    background: transparent;
+    padding: 2px;
+}
+.card .corner.rank { font-size: 12px; }
+.card .corner.suit { font-size: 14px; }
+.card .corner.tl { top: 6px; left: 6px; }
+.card .corner.tr { top: 6px; right: 6px; }
+.card .corner.bl { bottom: 6px; left: 6px; }
+.card .corner.br { bottom: 6px; right: 6px; }
+
+.card .center-suit {
+    font-size: 22px;
+    opacity: 0.9;
+    pointer-events: none;
+}
+
+/* Ensure red/black inherit colors */
+.card.red { color: red; }
+.card.black { color: black; }
+
+@media (max-width: 480px) {
+    .card .corner { font-size: 10px; }
+    .card .center-suit { font-size: 18px; }
 }
 
 /* App version badge fixed to bottom center (safe for iOS notch/home indicator) */

@@ -15,14 +15,31 @@ class Card {
         return values[rank];
     }
 
+    getSuitSymbol() {
+        const map = { 'hearts': '\u2665', 'diamonds': '\u2666', 'clubs': '\u2663', 'spades': '\u2660' };
+        return map[this.suit] || this.suit[0].toUpperCase();
+    }
+
     createElement() {
         const el = document.createElement('div');
         el.className = `card ${this.color}`;
-        el.textContent = `${this.rank}${this.suit[0].toUpperCase()}`;
         el.dataset.suit = this.suit;
         el.dataset.rank = this.rank;
         el.dataset.value = this.value;
         el.dataset.cardId = this.id;
+        el.setAttribute('role', 'img');
+        el.setAttribute('aria-label', `${this.rank} of ${this.suit}`);
+
+        // Corners: rank top-left / bottom-right, suit top-right / bottom-left
+        const suit = this.getSuitSymbol();
+        el.innerHTML = `
+            <span class="corner tl rank">${this.rank}</span>
+            <span class="corner tr suit">${suit}</span>
+            <span class="corner bl suit">${suit}</span>
+            <span class="corner br rank">${this.rank}</span>
+            <div class="center-suit">${suit}</div>
+        `;
+
         this.element = el;
         return el;
     }

@@ -23,3 +23,41 @@ A Progressive Web App for playing Freecell solitaire, optimized for iPad and iPh
 - Add app icons (192x192 and 512x512 PNGs in icons/ folder)
 - Improve game logic for moving card sequences
 - Add win detection and game stats
+- test publishing on github pages
+- options button
+  - move version to options eventually
+
+### static visuals TODO
+- overlapping cards ~2/3
+- corners less padding
+- shadow A's in foundations
+- hide column outline
+  - less space between columns
+- subtler foundation and freecell outline - lighter color with shadow and same size as cards
+  - side by side, or on screen edges
+
+### controls todo
+- automated card move
+- tap to move - cycle available slots, cascade first (not to foundation)
+- options newgame when not in win or fresh state, so don't accidentally push it
+- undo button - unlimited undos to start
+
+### fancy features TODO
+- landscape mode has freecells and foundations to the side, horizontal has them on top
+- shading on groups in columns - subtle
+  - different shading based on how many i can currently move
+- number selector to highlight where cards are
+  - and suits - but only next 3 for foundations
+- dark mode - black background, dark gray cards, red and light gray suits, white buttons
+- allow pull from foundations
+- when to pwa refresh to new version - new game. Allow new games offline
+- face image for face cards JQK
+- winnable deals only
+  - difficulty?
+- movement and win animations and deal?
+- squish cards when column to long
+- stats - games won/lost, streak. Time? score?
+
+### other games
+- spider, with ghost cards after undo
+- sudoku, with single cell super pencil, number selector with . incicator for remaining, and full color
