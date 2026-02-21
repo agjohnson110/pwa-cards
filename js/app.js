@@ -132,6 +132,12 @@ class FreecellGame {
         document.addEventListener('touchmove', this.handleTouchMove.bind(this), { passive: false });
         document.addEventListener('touchend', this.handleTouchEnd.bind(this), { passive: false });
 
+        // Pointer events for mouse + touch (covers Windows mouse dragging)
+        document.addEventListener('pointerdown', this.handlePointerDown.bind(this));
+        document.addEventListener('pointermove', this.handlePointerMove.bind(this));
+        document.addEventListener('pointerup', this.handlePointerUp.bind(this));
+        document.addEventListener('pointercancel', this.handlePointerUp.bind(this));
+
         document.getElementById('new-game').addEventListener('click', () => {
             this.resetGame();
         });
@@ -173,6 +179,44 @@ class FreecellGame {
             this.draggedCard = null;
             this.draggedStack = [];
         }
+    }
+
+    // Pointer (mouse + touch unified) handlers so desktop dragging works
+    handlePointerDown(e) {
+        // Only handle primary button / primary touch
+        if (e.isPrimary === false) return;
+        e.preventDefault();
+        this.touchStartX = e.clientX;
+        this.touchStartY = e.clientY;
+        const target = document.elementFromPoint(e.clientX, e.clientY);
+        if (target && target.classList.contains('card')) {
+            this.draggedCard = target;
+            this.draggedCard.classList.add('dragging');
+            const parent = target.parentElement;
+            const cards = Array.from(parent.children);
+            const index = cards.indexOf(target);
+            this.draggedStack = cards.slice(index);
+            try { target.setPointerCapture && target.setPointerCapture(e.pointerId); } catch (err) {}
+        }
+    }
+
+    handlePointerMove(e) {
+        if (!this.draggedCard) return;
+        e.preventDefault();
+        const deltaX = e.clientX - this.touchStartX;
+        const deltaY = e.clientY - this.touchStartY;
+        this.draggedCard.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
+    }
+
+    handlePointerUp(e) {
+        if (!this.draggedCard) return;
+        this.draggedCard.classList.remove('dragging');
+        this.draggedCard.style.transform = '';
+        const target = document.elementFromPoint(e.clientX, e.clientY);
+        this.attemptMove(target);
+        try { this.draggedCard.releasePointerCapture && this.draggedCard.releasePointerCapture(e.pointerId); } catch (err) {}
+        this.draggedCard = null;
+        this.draggedStack = [];
     }
 
     attemptMove(target) {
