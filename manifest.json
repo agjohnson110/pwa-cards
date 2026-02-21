@@ -1,8 +1,8 @@
 {
-    "name": "Freecell PWA",
+    "name": "Freecell Solitaire",
     "short_name": "Freecell",
     "description": "Play Freecell solitaire on your device",
-    "start_url": "/",
+    "start_url": "/pwa-cards/index.html",
     "display": "standalone",
     "background_color": "#008000",
     "theme_color": "#007bff",
