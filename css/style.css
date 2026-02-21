@@ -91,7 +91,7 @@ body {
     font-size: 12px;
     font-weight: bold;
     color: black;
-    margin-top: -40px;
+    margin-top: -50px; /* overlap cards in tableau ~2/3 */
     cursor: pointer;
     user-select: none;
     position: relative;

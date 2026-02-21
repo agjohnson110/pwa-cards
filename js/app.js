@@ -16,10 +16,12 @@ class Card {
     }
 
     getSuitSymbol() {
+        // Unicode suit symbols for better visuals
         const map = { 'hearts': '\u2665', 'diamonds': '\u2666', 'clubs': '\u2663', 'spades': '\u2660' };
         return map[this.suit] || this.suit[0].toUpperCase();
     }
 
+    // Create a DOM element for this card with appropriate classes and data attributes
     createElement() {
         const el = document.createElement('div');
         el.className = `card ${this.color}`;
@@ -67,6 +69,7 @@ class FreecellGame {
         this.registerServiceWorker();
     }
 
+    // push new Card instances into this.deck, of all 52 standard cards
     createDeck() {
         const suits = ['hearts', 'diamonds', 'clubs', 'spades'];
         const ranks = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
@@ -77,6 +80,7 @@ class FreecellGame {
         }
     }
 
+    // Shuffle the deck using Fisher-Yates random algorithm
     shuffleDeck() {
         for (let i = this.deck.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
@@ -84,9 +88,8 @@ class FreecellGame {
         }
     }
 
+    // Pop cards off the shuffled deck into tableau columns
     dealCards() {
-        // Pop cards off the shuffled deck into tableau columns so the
-        // deck no longer holds references to dealt cards.
         for (let col = 0; col < 8; col++) {
             const numCards = col < 4 ? 7 : 6;
             for (let i = 0; i < numCards; i++) {
@@ -94,10 +97,11 @@ class FreecellGame {
                 this.tableau[col].push(card);
             }
         }
-        // Clear any remaining references in the deck
+        // Clear any remaining references in the deck. Shouldn't be necessary
         this.deck = [];
     }
 
+    // Render the game state, using createElement() to display the cards objects in each location.
     render() {
         // Render free cells
         for (let i = 0; i < 4; i++) {
@@ -144,40 +148,40 @@ class FreecellGame {
     }
 
     handleTouchStart(e) {
-        const touch = e.touches[0];
-        this.touchStartX = touch.clientX;
+        const touch = e.touches[0]; // Get the first (primary) touch point
+        this.touchStartX = touch.clientX; 
         this.touchStartY = touch.clientY;
-        const target = document.elementFromPoint(touch.clientX, touch.clientY);
+        const target = document.elementFromPoint(touch.clientX, touch.clientY); //Finds which DOM element is at that touch coordinates
         if (target.classList.contains('card')) {
-            this.draggedCard = target;
-            this.draggedCard.classList.add('dragging');
+            this.draggedCard = target; // Store the card being dragged
+            this.draggedCard.classList.add('dragging'); // makes card transparent while dragging
             // Find the stack
-            const parent = target.parentElement;
-            const cards = Array.from(parent.children);
-            const index = cards.indexOf(target);
-            this.draggedStack = cards.slice(index);
+            const parent = target.parentElement; // Get the container (column, foundation, etc.)
+            const cards = Array.from(parent.children); // Convert child cards to an array
+            const index = cards.indexOf(target); // Find the position of the touched card
+            this.draggedStack = cards.slice(index); // Get all cards from here to the end
         }
     }
 
     handleTouchMove(e) {
-        e.preventDefault();
+        e.preventDefault(); // Prevent scrolling while dragging
         if (this.draggedCard) {
-            const touch = e.touches[0];
-            const deltaX = touch.clientX - this.touchStartX;
+            const touch = e.touches[0]; // Get the current touch position
+            const deltaX = touch.clientX - this.touchStartX; // Calculate how far the touch has moved from the start
             const deltaY = touch.clientY - this.touchStartY;
-            this.draggedCard.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
+            this.draggedCard.style.transform = `translate(${deltaX}px, ${deltaY}px)`; // Move the card visually as you drag
         }
     }
 
     handleTouchEnd(e) {
         if (this.draggedCard) {
-            this.draggedCard.classList.remove('dragging');
-            this.draggedCard.style.transform = '';
-            const touch = e.changedTouches[0];
-            const target = document.elementFromPoint(touch.clientX, touch.clientY);
-            this.attemptMove(target);
-            this.draggedCard = null;
-            this.draggedStack = [];
+            this.draggedCard.classList.remove('dragging'); // Remove the semi-transparent effect
+            this.draggedCard.style.transform = ''; // Reset position to snap back if not moved to a valid spot
+            const touch = e.changedTouches[0]; // Get the final touch position (where finger left screen)
+            const target = document.elementFromPoint(touch.clientX, touch.clientY); //Finds which DOM element is at the touch release coordinates
+            this.attemptMove(target); // Check if the move is valid and execute it
+            this.draggedCard = null; // Cleanup for next drag
+            this.draggedStack = []; // Cleanup for next drag
         }
     }
 

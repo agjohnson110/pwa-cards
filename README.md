@@ -2,7 +2,6 @@
 card based games
 
 ## Freecell PWA
-
 A Progressive Web App for playing Freecell solitaire, optimized for iPad and iPhone.
 
 ### Features
@@ -21,20 +20,14 @@ A Progressive Web App for playing Freecell solitaire, optimized for iPad and iPh
 - On Android: Use "Add to Home Screen" from browser menu
 
 ### TODO
-- Add app icons (192x192 and 512x512 PNGs in icons/ folder)
 - Improve game logic for moving card sequences
 - Add win detection and game stats
 - options button
   - move version to options eventually
 
 ### static visuals TODO
-- overlapping cards ~2/3
-- corners less padding
-- shadow A's in foundations
-- hide column outline
-  - less space between columns
-- subtler foundation and freecell outline - lighter color with shadow and same size as cards
-  - side by side, or on screen edges
+- less space between columns
+- empty column outline
 
 ### controls todo
 - automated card move
@@ -43,7 +36,6 @@ A Progressive Web App for playing Freecell solitaire, optimized for iPad and iPh
 - undo button - unlimited undos to start
 
 ### fancy features TODO
-- landscape mode has freecells and foundations to the side, horizontal has them on top
 - shading on groups in columns - subtle
   - different shading based on how many i can currently move
 - number selector to highlight where cards are
@@ -52,8 +44,6 @@ A Progressive Web App for playing Freecell solitaire, optimized for iPad and iPh
 - allow pull from foundations
 - when to pwa refresh to new version - new game. Allow new games offline
 - face image for face cards JQK
-- winnable deals only
-  - difficulty?
 - movement and win animations and deal?
 - squish cards when column to long
 - stats - games won/lost, streak. Time? score?
