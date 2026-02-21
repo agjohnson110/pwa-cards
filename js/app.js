@@ -256,6 +256,7 @@ class FreecellGame {
 
     // return true if card is trapped by other cards or if there are not enough free cells to move the stack
     preMoveCheckFailed(target) {
+        // Check stack order
         for (let i=0; i < this.draggedStack.length - 1; i++) {
             const currCard = this.draggedStack[i];
             const nextCard = this.draggedStack[i+1];
@@ -265,6 +266,13 @@ class FreecellGame {
             if (parseInt(nextCard.dataset.value) !== parseInt(currCard.dataset.value) - 1) {
                 return true; // If adjacent cards are not in descending order, target is trapped
             }
+        }
+
+        // Check stack size vs free cells
+        const freeCellsAvailable = this.freeCells.filter(cell => cell.length === 0).length;
+        const emptyColumnsAvailable = this.tableau.filter(col => col.length === 0).length;
+        if (this.draggedStack.length > (2 ** emptyColumnsAvailable) * (freeCellsAvailable + 1)) {
+            return true; // This rule applies to moving stacks to a non-empty column. Moving to an empty column is more restrictive and checked during the attemptMove.
         }
         return false;
     }
@@ -296,21 +304,28 @@ class FreecellGame {
     }
 
     isValidMove(source, dest, cardData) {
+        //return true; //DEBUG
         // Implement Freecell move rules
         if (dest.classList.contains('cell')) {
             if (this.draggedStack.length > 1) return false; // Can't move multiple cards to a free cell
-            return dest.children.length === 0; // Can only place on empty cell
+            return dest.children.length === 0; // Can only place on empty free cell
         } else if (dest.classList.contains('foundation')) {
             if (this.draggedStack.length > 1) return false; // Can't move multiple cards to a foundation
             if (dest.children.length === 0) {
                 return cardData.rank === 'A'; // Only Aces can go on empty foundation
             } else {
                 const topCardEl = dest.lastElementChild;
-                if (topCardEl.dataset.suit !== cardData.suit) return false; // Must be same suit
-                return topCardEl.dataset.value === String(cardData.value - 1); // Must be one rank lower
+                if (topCardEl.dataset.suit !== cardData.suit) return false; // Must be same suit as top foundation card
+                return topCardEl.dataset.value === String(cardData.value - 1); // Must be one rank lower than top foundation card
             }
         } else if (dest.classList.contains('column')) {
             if (dest.children.length === 0) {
+                // preMoveCheck assumes moving to non-empty column, so we need to check empty column move validity here.
+                const freeCellsAvailable = this.freeCells.filter(cell => cell.length === 0).length;
+                const emptyColumnsAvailable = this.tableau.filter(col => col.length === 0).length - 1; // Exclude the destination column since it can't be used.
+                if (this.draggedStack.length > (2 ** emptyColumnsAvailable) * (freeCellsAvailable + 1)) {
+                    return false;
+                }
                 return true; // Can place any card on empty column
             } else {
                 const topCardEl = dest.lastElementChild;
