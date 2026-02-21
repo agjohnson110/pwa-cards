@@ -132,10 +132,6 @@ class FreecellGame {
     }
 
     addEventListeners() {
-        document.addEventListener('touchstart', this.handleTouchStart.bind(this), { passive: false });
-        document.addEventListener('touchmove', this.handleTouchMove.bind(this), { passive: false });
-        document.addEventListener('touchend', this.handleTouchEnd.bind(this), { passive: false });
-
         // Pointer events for mouse + touch (covers Windows mouse dragging)
         document.addEventListener('pointerdown', this.handlePointerDown.bind(this));
         document.addEventListener('pointermove', this.handlePointerMove.bind(this));
@@ -147,44 +143,6 @@ class FreecellGame {
         });
     }
 
-    handleTouchStart(e) {
-        const touch = e.touches[0]; // Get the first (primary) touch point
-        this.touchStartX = touch.clientX; 
-        this.touchStartY = touch.clientY;
-        const target = document.elementFromPoint(touch.clientX, touch.clientY); //Finds which DOM element is at that touch coordinates
-        if (target.classList.contains('card')) {
-            this.draggedCard = target; // Store the card being dragged
-            this.draggedCard.classList.add('dragging'); // makes card transparent while dragging
-            // Find the stack
-            const parent = target.parentElement; // Get the container (column, foundation, etc.)
-            const cards = Array.from(parent.children); // Convert child cards to an array
-            const index = cards.indexOf(target); // Find the position of the touched card
-            this.draggedStack = cards.slice(index); // Get all cards from here to the end
-        }
-    }
-
-    handleTouchMove(e) {
-        e.preventDefault(); // Prevent scrolling while dragging
-        if (this.draggedCard) {
-            const touch = e.touches[0]; // Get the current touch position
-            const deltaX = touch.clientX - this.touchStartX; // Calculate how far the touch has moved from the start
-            const deltaY = touch.clientY - this.touchStartY;
-            this.draggedCard.style.transform = `translate(${deltaX}px, ${deltaY}px)`; // Move the card visually as you drag
-        }
-    }
-
-    handleTouchEnd(e) {
-        if (this.draggedCard) {
-            this.draggedCard.classList.remove('dragging'); // Remove the semi-transparent effect
-            this.draggedCard.style.transform = ''; // Reset position to snap back if not moved to a valid spot
-            const touch = e.changedTouches[0]; // Get the final touch position (where finger left screen)
-            const target = document.elementFromPoint(touch.clientX, touch.clientY); //Finds which DOM element is at the touch release coordinates
-            this.attemptMove(target); // Check if the move is valid and execute it
-            this.draggedCard = null; // Cleanup for next drag
-            this.draggedStack = []; // Cleanup for next drag
-        }
-    }
-
     // Pointer (mouse + touch unified) handlers so desktop dragging works
     handlePointerDown(e) {
         // Only handle primary button / primary touch
@@ -192,35 +150,44 @@ class FreecellGame {
         e.preventDefault();
         this.touchStartX = e.clientX;
         this.touchStartY = e.clientY;
-        const target = document.elementFromPoint(e.clientX, e.clientY);
+        const target = document.elementFromPoint(e.clientX, e.clientY); //Finds which DOM element is at that touch coordinates
         if (target && target.classList.contains('card')) {
-            this.draggedCard = target;
-            this.draggedCard.classList.add('dragging');
-            const parent = target.parentElement;
-            const cards = Array.from(parent.children);
-            const index = cards.indexOf(target);
-            this.draggedStack = cards.slice(index);
+            this.draggedCard = target; // Store the card being dragged
+            const parent = target.parentElement; // Get the container (column, foundation, etc.)
+            const cards = Array.from(parent.children); // Convert child cards to an array
+            const index = cards.indexOf(target); // Find the position of the touched card
+            this.draggedStack = cards.slice(index); // Get all cards from here to the end
+            // Add dragging class to all cards in the stack
+            this.draggedStack.forEach(card => {
+                card.classList.add('dragging'); // makes cards transparent while dragging
+            });
             try { target.setPointerCapture && target.setPointerCapture(e.pointerId); } catch (err) {}
         }
     }
 
     handlePointerMove(e) {
         if (!this.draggedCard) return;
-        e.preventDefault();
-        const deltaX = e.clientX - this.touchStartX;
+        e.preventDefault(); // Prevent scrolling while dragging
+        const deltaX = e.clientX - this.touchStartX; // Calculate how far the touch has moved from the start
         const deltaY = e.clientY - this.touchStartY;
-        this.draggedCard.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
+        // Move all cards in the dragged stack
+        this.draggedStack.forEach(card => {
+            card.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
+        });
     }
 
     handlePointerUp(e) {
         if (!this.draggedCard) return;
-        this.draggedCard.classList.remove('dragging');
-        this.draggedCard.style.transform = '';
-        const target = document.elementFromPoint(e.clientX, e.clientY);
-        this.attemptMove(target);
+        // Reset all cards in the dragged stack
+        this.draggedStack.forEach(card => {
+            card.classList.remove('dragging'); // Remove the semi-transparent effect
+            card.style.transform = ''; // Reset position to snap back if not moved to a valid spot
+        });
+        const target = document.elementFromPoint(e.clientX, e.clientY);  //Finds which DOM element is at the release coordinates
+        this.attemptMove(target); // Check if the move is valid and execute it
         try { this.draggedCard.releasePointerCapture && this.draggedCard.releasePointerCapture(e.pointerId); } catch (err) {}
-        this.draggedCard = null;
-        this.draggedStack = [];
+        this.draggedCard = null; // Cleanup for next drag
+        this.draggedStack = []; // Cleanup for next drag
     }
 
     attemptMove(target) {
