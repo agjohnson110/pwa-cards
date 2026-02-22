@@ -10,73 +10,54 @@ body {
     min-height: 100vh;
 }
 
-@media (min-width: 768px) {
-    body {
-        background-color: #c20000;
-    }
-}
-
-@media (min-width: 1024px) {
-    body {
-        background-color: #0003c0;
-    }
-}
-
 #game {
     display: flex;
     flex-direction: column;
     align-items: center;
     width: 100%;
-    max-width: 1100px;
-    margin: 10px;
 }
 
 #top-area {
     display: flex;
     flex-direction: row;
-    gap: 10px;
+    justify-content: space-around;
     width: 100%;
-    margin-bottom: 15px;
-}
-
-@media (min-width: 768px) {
-    #top-area {
-        gap: 20px;
-        margin-bottom: 20px;
-    }
 }
 
 #free-cells, #foundations {
     display: flex;
+    flex-direction: row;
+    justify-content: flex-end;
+    width: 48%;
+}
+
+#foundations {
+    display: flex;
+    flex-direction: row;
+    justify-content: flex-start;
+    width: 48%;
+}
+
+#tableau {
+    display: flex;
     justify-content: space-around;
-    flex: 1;
+    width: 100%;
 }
 
 .cell, .foundation {
-    width: 45px;
-    height: 60px;
-    border-radius: 5px;
+    aspect-ratio: 1 / 1.4;
+    border-radius: 5%;
     background-color: rgba(255, 255, 255, 0.2);
     display: flex;
     align-items: center;
     justify-content: center;
+    position: relative;
 }
 
-@media (min-width: 768px) {
-    .cell, .foundation {
-        width: 55px;
-        height: 74px;
-    }
-}
-
-@media (min-width: 1024px) {
-    .cell, .foundation {
-        width: 60px;
-        height: 80px;
-    }
-}
-
-.foundation {
+.column {
+    min-height: 250px;
+    border-radius: 5%;
+    background-color: rgba(255, 255, 255, 0);
     position: relative;
 }
 
@@ -94,81 +75,23 @@ body {
     z-index: 0;
 }
 
-@media (min-width: 768px) {
-    .foundation::before {
-        font-size: 28px;
-    }
-}
-
-@media (min-width: 1024px) {
-    .foundation::before {
-        font-size: 36px;
-    }
-}
-
-#tableau {
-    display: flex;
-    justify-content: space-around;
-    width: 100%;
-}
-
-.column {
-    width: 45px;
-    min-height: 250px;
-    border-radius: 5px;
-    background-color: rgba(255, 255, 255, 0);
-    position: relative;
-    padding: 3px;
-}
-
-@media (min-width: 768px) {
-    .column {
-        width: 55px;
-        min-height: 320px;
-        padding: 4px;
-    }
-}
-
-@media (min-width: 1024px) {
-    .column {
-        width: 60px;
-        min-height: 400px;
-        padding: 5px;
-    }
-}
-
 .column::before {
     content: "";
     position: absolute;
-    top: 5px;
+    top: 0%;
     left: 50%;
-    transform: translateX(-50%);
-    width: 45px;
-    height: 60px;
-    border-radius: 5px;
+    transform: translate(-50%, 0%);
+    aspect-ratio: 1 / 1.4;
+    border-radius: 5%;
     background-color: rgba(255, 255, 255, 0.2);
     pointer-events: none;
     z-index: 0;
 }
 
-@media (min-width: 768px) {
-    .column::before {
-        width: 55px;
-        height: 74px;
-    }
-}
-
-@media (min-width: 1024px) {
-    .column::before {
-        width: 60px;
-        height: 80px;
-    }
-}
-
 .card {
-    width: 45px;
-    height: 60px;
-    border-radius: 5px;
+    aspect-ratio: 1 / 1.4;
+    width: 12vw;
+    border-radius: 5%;
     border: 1px solid rgba(97, 97, 97, 0.85);
     box-sizing: border-box;
     display: flex;
@@ -178,29 +101,61 @@ body {
     font-size: 9px;
     font-weight: bold;
     color: black;
-    margin-top: -25px;
+    margin-top: -100%;
     cursor: pointer;
     user-select: none;
     position: relative;
 }
 
-@media (min-width: 768px) {
+/* Portrait: height > width */
+@media (max-aspect-ratio: 1/1) {
+    .column, .cell, .foundation {
+        width: 12vw;
+    }
+    #foundations, #free-cells {
+        margin: 5vh 0;
+    }
+    .foundation::before {
+        font-size: 28px;
+    }
+    .column::before {
+        width: 12vw;
+    }
     .card {
-        width: 55px;
-        height: 74px;
+        width: 12vw;
         font-size: 10px;
-        margin-top: -35px;
     }
 }
 
-@media (min-width: 1024px) {
+/* Landscape: width > height */
+@media (min-aspect-ratio: 1/1) {
+    .column, .cell, .foundation {
+        width: 10vh;
+        margin: 0 5px;
+    }
+    .column {
+        margin: 0 10px;
+    }
+    #foundations, #free-cells {
+        margin-top: 5vh;
+        margin-bottom: 1vh;
+        width: 40%;
+    }
+    #tableau {
+        justify-content: center;
+    }
+    .foundation::before {
+        font-size: 36px;
+    }
+    .column::before {
+        width: 10vh;
+    }
     .card {
-        width: 60px;
-        height: 80px;
-        font-size: 12px;
-        margin-top: -50px;
+        width: 10vh;
+        font-size: 18px;
     }
 }
+
 
 .column .card:first-child {
     margin-top: 0;
