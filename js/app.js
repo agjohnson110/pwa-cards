@@ -132,6 +132,9 @@ class FreecellGame {
                 col.appendChild(card.createElement());
             }
         }
+
+        // After rendering, attempt to auto-move any cards to foundations if possible to keep game flowing smoothly.
+        this.autoMoveToFoundation();
     }
 
     addEventListeners() {
@@ -386,7 +389,7 @@ class FreecellGame {
 
     isValidMove(source, dest) {
         //return true; //DEBUG
-        console.log(`Checking move validity from ${source.id} to ${dest ? dest.id : 'null'}`);
+        //console.log(`Checking move validity from ${source.id} to ${dest ? dest.id : 'null'}`);
         if (!dest) return false; // Invalid drop target
         // Implement Freecell move rules
         if (dest.classList.contains('cell')) {
@@ -474,6 +477,88 @@ class FreecellGame {
             }
             return;
         }
+    }
+
+    // Automatically move any card to a foundation if it's a valid move, and repeat until no more auto moves are possible.
+    // This is called after every successful move to keep the game flowing smoothly.
+    autoMoveToFoundation() {
+        for (let i = 1; i <= 12; i++) { // For all columns and free cells
+            let colCell;
+            if (i <= 8) {
+                colCell = document.getElementById(`col${i}`);
+            } else {
+                colCell = document.getElementById(`free${i-8}`);
+            }
+
+            if (!colCell ||colCell.children.length === 0) continue; // If empty no card to move
+
+            //const movingCard = colCell.lastElementChild;
+            this.draggedCard = colCell.lastElementChild;
+            //const movingSuit = movingCard.dataset.suit;
+            const movingValue = parseInt(this.draggedCard.dataset.value);
+            const movingColor = this.draggedCard.dataset.color;
+
+            
+            //console.log(`Checking auto-move for ${this.draggedCard.dataset.rank} of ${this.draggedCard.dataset.suit}`);
+            if (movingValue === 1 || movingValue === 2) { // Ace or 2 can always move to foundation without additional check.
+                for (let i = 0; i < 4; i++) {
+                    const foundation = document.getElementById(`found${i+1}`);
+                    if (this.isValidMove(colCell, foundation)) { // Find valid foundation to move to.
+                        this.moveCard(colCell, foundation, this.draggedCard.dataset.cardId);
+                        this.render();
+                        return; // done
+                    }
+                }
+            }
+            else {
+                // Find valid foundation to move to.
+                let foundatationTarget = null;
+                for (let i = 0; i < 4; i++) {
+                    const foundation = document.getElementById(`found${i+1}`);
+                    if (this.isValidMove(colCell, foundation)) { 
+                        foundatationTarget = foundation;
+                        break;
+                    }
+                }
+                if (!foundatationTarget) {
+                    //console.log(`No valid foundation to auto-move ${this.draggedCard.dataset.rank} of ${this.draggedCard.dataset.suit}`);
+                    continue; // No valid foundation to move to, skip checks
+                }
+                console.log(`Found valid foundation to auto-move ${this.draggedCard.dataset.rank} of ${this.draggedCard.dataset.suit}`);
+
+                // Only move if the card is not needed in the tableau anymore
+                let readyToMove = 0;
+                for (let i = 0; i < 4; i++) {
+                    const foundation = document.getElementById(`found${i+1}`);
+                    if (foundation.children.length > 0) {
+                        const topFoundationCard = foundation.lastElementChild;
+                        console.log(`Checking foundation ${foundation.id} with top card ${topFoundationCard.dataset.value} of ${topFoundationCard.dataset.suit} against moving card ${movingColor} ${movingValue}`);
+                        if (movingColor === 'red') {
+                            if (topFoundationCard.dataset.suit === 'clubs' && parseInt(topFoundationCard.dataset.value) >= movingValue - 2) {
+                                readyToMove++;
+                            }
+                            if (topFoundationCard.dataset.suit === 'spades' && parseInt(topFoundationCard.dataset.value) >= movingValue - 2) {
+                                readyToMove++;
+                            }
+                        } else { // movingColor === 'black'
+                            if (topFoundationCard.dataset.suit === 'hearts' && parseInt(topFoundationCard.dataset.value) >= movingValue - 2) {
+                                readyToMove++;
+                            }
+                            if (topFoundationCard.dataset.suit === 'diamonds' && parseInt(topFoundationCard.dataset.value) >= movingValue - 2) {
+                                readyToMove++;
+                            }
+                        }
+                    }
+                    console.log(`Foundation ${foundation.id} has ${foundation.children.length} cards. readyToMove = ${readyToMove}`);
+                }
+                console.log(`Auto-move check for ${this.draggedCard.dataset.rank} of ${this.draggedCard.dataset.suit}: readyToMove = ${readyToMove}`);
+                if (readyToMove === 2) {
+                    this.moveCard(colCell, foundatationTarget, this.draggedCard.dataset.cardId);
+                    this.render();
+                    return; // done
+                }
+            } // end of 3 - King check
+        } // end of loop through columns and free cells
     }
 
     checkWin() {
