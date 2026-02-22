@@ -145,7 +145,7 @@ class FreecellGame {
         document.addEventListener('pointercancel', this.handlePointerUp.bind(this));
 
         document.getElementById('new-game').addEventListener('click', () => {
-            this.resetGame();
+            this.clearCacheAndReset();
         });
     }
 
@@ -395,6 +395,28 @@ class FreecellGame {
 
     checkWin() {
         return this.foundations.every(f => f.length === 13);
+    }
+
+    clearCacheAndReset() {
+        // Clear all caches and unregister service workers
+        if ('caches' in window) {
+            caches.keys().then(names => {
+                names.forEach(name => {
+                    caches.delete(name);
+                });
+            });
+        }
+
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistrations().then(registrations => {
+                registrations.forEach(registration => {
+                    registration.unregister();
+                });
+            });
+        }
+
+        // Reset the game
+        this.resetGame();
     }
 
     resetGame() {

@@ -20,14 +20,14 @@ A Progressive Web App for playing Freecell solitaire, optimized for iPad and iPh
 - On Android: Use "Add to Home Screen" from browser menu
 
 ### TODO
-- Improve game logic for moving card sequences
 - Add win detection and game stats
 - options button
   - move version to options eventually
 
-### static visuals TODO
+### visuals TODO
 - less space between columns
-- empty column outline
+  - bigger cards
+- dragging cards need to be on top - can be under some newer columns
 
 ### controls todo
 - automated card move
