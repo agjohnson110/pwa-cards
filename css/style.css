@@ -46,7 +46,7 @@ body {
 
 .cell, .foundation {
     aspect-ratio: 1 / 1.4;
-    border-radius: 5%;
+    border-radius: 8%;
     background-color: rgba(255, 255, 255, 0.2);
     display: flex;
     align-items: center;
@@ -56,7 +56,7 @@ body {
 
 .column {
     min-height: 250px;
-    border-radius: 5%;
+    border-radius: 8%;
     background-color: rgba(255, 255, 255, 0);
     position: relative;
 }
@@ -82,7 +82,7 @@ body {
     left: 50%;
     transform: translate(-50%, 0%);
     aspect-ratio: 1 / 1.4;
-    border-radius: 5%;
+    border-radius: 8%;
     background-color: rgba(255, 255, 255, 0.2);
     pointer-events: none;
     z-index: 0;
@@ -91,7 +91,7 @@ body {
 .card {
     aspect-ratio: 1 / 1.4;
     width: 12vw;
-    border-radius: 5%;
+    border-radius: 8%;
     border: 1px solid rgba(97, 97, 97, 0.85);
     box-sizing: border-box;
     display: flex;
@@ -101,10 +101,32 @@ body {
     font-size: 9px;
     font-weight: bold;
     color: black;
-    margin-top: -100%;
+    margin-top: -90%;
     cursor: pointer;
     user-select: none;
     position: relative;
+}
+
+/* Card corner layout */
+.card .corner {
+    position: absolute;
+    font-size: 11px;
+    line-height: 1;
+    font-weight: bold;
+    background: transparent;
+    padding: 2px;
+}
+.card .corner.rank { font-size: 12px; }
+.card .corner.suit { font-size: 14px; }
+.card .corner.tl { top: 6px; left: 6px; }
+.card .corner.tr { top: 6px; right: 6px; }
+.card .corner.bl { bottom: 6px; left: 6px; }
+.card .corner.br { bottom: 6px; right: 6px; }
+
+.card .center-suit {
+    font-size: 22px;
+    opacity: 0.9;
+    pointer-events: none;
 }
 
 /* Portrait: height > width */
@@ -125,12 +147,20 @@ body {
         width: 12vw;
         font-size: 10px;
     }
+    .card .corner.tl { top: 3px; left: 3px; }
+    .card .corner.tr { top: 1px; right: 3px; }
+    .card .corner.bl { bottom: 3px; left: 3px; }
+    .card .corner.br { bottom: 3px; right: 3px; }
+    .card .corner { font-size: 12px; }
+    .card .corner.rank { font-size: 16px; }
+    .card .corner.suit { font-size: 20px; }
+    .card .center-suit { font-size: 36px; }
 }
 
 /* Landscape: width > height */
 @media (min-aspect-ratio: 1/1) {
     .column, .cell, .foundation {
-        width: 10vh;
+        width: 12vh;
         margin: 0 5px;
     }
     .column {
@@ -145,15 +175,23 @@ body {
         justify-content: center;
     }
     .foundation::before {
-        font-size: 36px;
+        font-size: 48px;
     }
     .column::before {
-        width: 10vh;
+        width: 12vh;
     }
     .card {
-        width: 10vh;
+        width: 12vh;
         font-size: 18px;
     }
+    .card .corner.tl { top: 4px; left: 4px; }
+    .card .corner.tr { top: 1px; right: 4px; }
+    .card .corner.bl { bottom: 4px; left: 4px; }
+    .card .corner.br { bottom: 4px; right: 4px; }
+    .card .corner { font-size: 32px; }
+    .card .corner.rank { font-size: 24px; }
+    .card .corner.suit { font-size: 30px; }
+    .card .center-suit { font-size: 64px; }
 }
 
 
@@ -195,61 +233,6 @@ body {
 
 #new-game:hover {
     background-color: #0056b3;
-}
-
-/* Card corners responsive sizing */
-@media (max-width: 480px) {
-    .card .corner.tl { top: 3px; left: 3px; }
-    .card .corner.tr { top: 3px; right: 3px; }
-    .card .corner.bl { bottom: 3px; left: 3px; }
-    .card .corner.br { bottom: 3px; right: 3px; }
-}
-
-@media (min-width: 768px) and (max-width: 1023px) {
-    .card .corner.tl { top: 4px; left: 4px; }
-    .card .corner.tr { top: 4px; right: 4px; }
-    .card .corner.bl { bottom: 4px; left: 4px; }
-    .card .corner.br { bottom: 4px; right: 4px; }
-}
-
-/* Card corner layout */
-.card .corner {
-    position: absolute;
-    font-size: 11px;
-    line-height: 1;
-    font-weight: bold;
-    background: transparent;
-    padding: 2px;
-}
-.card .corner.rank { font-size: 12px; }
-.card .corner.suit { font-size: 14px; }
-.card .corner.tl { top: 6px; left: 6px; }
-.card .corner.tr { top: 6px; right: 6px; }
-.card .corner.bl { bottom: 6px; left: 6px; }
-.card .corner.br { bottom: 6px; right: 6px; }
-
-.card .center-suit {
-    font-size: 22px;
-    opacity: 0.9;
-    pointer-events: none;
-}
-
-/* Ensure red/black inherit colors */
-.card.red { color: red; }
-.card.black { color: black; }
-
-@media (max-width: 480px) {
-    .card .corner { font-size: 8px; }
-    .card .corner.rank { font-size: 9px; }
-    .card .corner.suit { font-size: 10px; }
-    .card .center-suit { font-size: 14px; }
-}
-
-@media (min-width: 768px) and (max-width: 1023px) {
-    .card .corner { font-size: 9px; }
-    .card .corner.rank { font-size: 10px; }
-    .card .corner.suit { font-size: 12px; }
-    .card .center-suit { font-size: 18px; }
 }
 
 /* App version badge fixed to bottom center (safe for iOS notch/home indicator) */
