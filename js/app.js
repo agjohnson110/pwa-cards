@@ -58,6 +58,8 @@ class FreecellGame {
         this.draggedStack = [];
         this.touchStartX = 0;
         this.touchStartY = 0;
+        this.dragNotTap = false;
+        this.tapThreshold = 8; // px movement allowed before it's considered a drag
         this.init();
     }
 
@@ -154,6 +156,7 @@ class FreecellGame {
         const touch = e.touches[0]; // Get the first (primary) touch point
         this.touchStartX = touch.clientX; 
         this.touchStartY = touch.clientY;
+        this.dragNotTap = false;
         const target = document.elementFromPoint(touch.clientX, touch.clientY); //Finds which DOM element is at that touch coordinates
         if (target && target.classList.contains('card')) {
             this.draggedCard = target; // Store the card being dragged
@@ -169,7 +172,7 @@ class FreecellGame {
             }
             // Add dragging class to all cards in the stack
             this.draggedStack.forEach(card => {
-                card.classList.add('dragging'); // makes cards transparent while dragging
+                card.classList.add('dragging'); // makes cards transparent and bring to front while dragging
             });
         }
     }
@@ -180,6 +183,14 @@ class FreecellGame {
             const touch = e.touches[0]; // Get the current touch position
             const deltaX = touch.clientX - this.touchStartX; // Calculate how far the touch has moved from the start
             const deltaY = touch.clientY - this.touchStartY;
+
+            // If not a drag yet and movement exceeds tap threshold, consider it a drag
+            if (!this.dragNotTap) {
+                if (Math.abs(deltaX) > this.tapThreshold || Math.abs(deltaY) > this.tapThreshold) {
+                    this.dragNotTap = true; // Now it's a drag
+                }
+            }
+
             // Move all cards in the dragged stack
             this.draggedStack.forEach(card => {
                 card.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
@@ -194,9 +205,17 @@ class FreecellGame {
                 card.classList.remove('dragging'); // Remove the semi-transparent effect
                 card.style.transform = ''; // Reset position
             });
-            const touch = e.changedTouches[0]; // Get the final touch position (where finger left screen)
-            const target = document.elementFromPoint(touch.clientX, touch.clientY);
-            this.attemptMove(target); // Check if the move is valid and execute it
+
+            if (this.dragNotTap ) {
+                const touch = e.changedTouches[0]; // Get the final touch position (where finger left screen)
+                const target = document.elementFromPoint(touch.clientX, touch.clientY);
+                this.attemptMove(target); // Check if the move is valid and execute it
+            }
+            else { // This was a tap/click, not a drag.
+                const target = this.findBestTarget();
+                this.attemptMove(target); // Check if the move is valid and execute it
+            }
+            
             this.draggedCard = null; // Cleanup for next drag
             this.draggedStack = []; // Cleanup for next drag
         }
@@ -209,6 +228,7 @@ class FreecellGame {
         e.preventDefault();
         this.touchStartX = e.clientX;
         this.touchStartY = e.clientY;
+        this.dragNotTap = false;
         const target = document.elementFromPoint(e.clientX, e.clientY); //Finds which DOM element is at that touch coordinates
         if (target && target.classList.contains('card')) {
             this.draggedCard = target; // Store the card being dragged
@@ -223,7 +243,7 @@ class FreecellGame {
             }
             // Add dragging class to all cards in the stack
             this.draggedStack.forEach(card => {
-                card.classList.add('dragging'); // makes cards transparent while dragging
+                card.classList.add('dragging'); // makes cards transparent and bring to front while dragging
             });
             try { target.setPointerCapture && target.setPointerCapture(e.pointerId); } catch (err) {}
         }
@@ -234,6 +254,14 @@ class FreecellGame {
         e.preventDefault(); // Prevent scrolling while dragging
         const deltaX = e.clientX - this.touchStartX; // Calculate how far the touch has moved from the start
         const deltaY = e.clientY - this.touchStartY;
+
+        // If not a drag yet and movement exceeds tap threshold, consider it a drag
+        if (!this.dragNotTap) {
+            if (Math.abs(deltaX) > this.tapThreshold || Math.abs(deltaY) > this.tapThreshold) {
+                this.dragNotTap = true; // Now it's a drag
+            }
+        }
+
         // Move all cards in the dragged stack
         this.draggedStack.forEach(card => {
             card.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
@@ -247,8 +275,16 @@ class FreecellGame {
             card.classList.remove('dragging'); // Remove the semi-transparent effect
             card.style.transform = ''; // Reset position to snap back if not moved to a valid spot
         });
-        const target = document.elementFromPoint(e.clientX, e.clientY);  //Finds which DOM element is at the release coordinates
-        this.attemptMove(target); // Check if the move is valid and execute it
+
+        if (this.dragNotTap ) {
+            const target = document.elementFromPoint(e.clientX, e.clientY);  //Finds which DOM element is at the release coordinates
+            this.attemptMove(target); // Check if the move is valid and execute it
+        }
+        else { // This was a tap/click, not a drag.
+            const target = this.findBestTarget();
+            this.attemptMove(target); // Check if the move is valid and execute it
+        }
+
         try { this.draggedCard.releasePointerCapture && this.draggedCard.releasePointerCapture(e.pointerId); } catch (err) {}
         this.draggedCard = null; // Cleanup for next drag
         this.draggedStack = []; // Cleanup for next drag
@@ -277,6 +313,51 @@ class FreecellGame {
         return false;
     }
 
+    findBestTarget() {
+        const currentParent = this.draggedCard.parentElement;
+        if (this.draggedStack.length > 1) { // Moving a stack, so we can only move to a column. Find the first valid column.
+            for (let i = 0; i < 8; i++) {
+                const col = document.getElementById(`col${i+1}`);
+                if (col === currentParent) continue; // Can't move to the same column
+                if (col.children.length !== 0) { // Check not empty first
+                    if (this.isValidMove(currentParent, col)) return col;  
+                }
+            }
+            for (let i = 0; i < 8; i++) {
+                const col = document.getElementById(`col${i+1}`);
+                if (col === currentParent) continue; // Can't move to the same column
+                if (col.children.length === 0) { // Check  empty next
+                    if (this.isValidMove(currentParent, col)) return col;  
+                }
+            }
+        } else { // Moving a single card, so we can move to column, free cell, or foundation
+            for (let i = 0; i < 8; i++) {
+                const col = document.getElementById(`col${i+1}`);
+                if (col === currentParent) continue; // Can't move to the same column
+                if (col.children.length !== 0) { // Check not empty first
+                    if (this.isValidMove(currentParent, col)) return col;  
+                }
+            }
+            for (let i = 0; i < 4; i++) { // Check free cells next
+                const cell = document.getElementById(`free${i+1}`);
+                if (this.isValidMove(currentParent, cell)) return cell;
+            }
+            for (let i = 0; i < 8; i++) {
+                const col = document.getElementById(`col${i+1}`);
+                if (col === currentParent) continue; // Can't move to the same column
+                if (col.children.length === 0) { // Check  empty columns after empty free cells
+                    if (this.isValidMove(currentParent, col)) return col;  
+                }
+            }
+            for (let i = 0; i < 4; i++) { // Check foundations last
+                const foundation = document.getElementById(`found${i+1}`);
+                if (this.isValidMove(currentParent, foundation)) return foundation;
+            }
+        }
+        console.log('No valid move found for tap/click');
+        return currentParent; // No valid move, return original parent to snap back
+    }
+
     attemptMove(target) {
         // Determine source and destination
         const source = this.draggedCard.parentElement;
@@ -285,15 +366,15 @@ class FreecellGame {
         if (!dest || source === dest) return;
 
         // Get card data
-        const cardData = {
+        /*const cardData = {
             suit: this.draggedCard.dataset.suit,
             rank: this.draggedCard.dataset.rank,
             value: parseInt(this.draggedCard.dataset.value),
             color: this.draggedCard.dataset.color
-        };
+        };*/
 
         // Check if move is valid using the same card info as before
-        if (this.isValidMove(source, dest, cardData)) {
+        if (this.isValidMove(source, dest)) {
             const cardId = this.draggedCard.dataset.cardId;
             this.moveCard(source, dest, cardId);
             this.render();
@@ -303,8 +384,10 @@ class FreecellGame {
         }
     }
 
-    isValidMove(source, dest, cardData) {
+    isValidMove(source, dest) {
         //return true; //DEBUG
+        console.log(`Checking move validity from ${source.id} to ${dest ? dest.id : 'null'}`);
+        if (!dest) return false; // Invalid drop target
         // Implement Freecell move rules
         if (dest.classList.contains('cell')) {
             if (this.draggedStack.length > 1) return false; // Can't move multiple cards to a free cell
@@ -312,11 +395,11 @@ class FreecellGame {
         } else if (dest.classList.contains('foundation')) {
             if (this.draggedStack.length > 1) return false; // Can't move multiple cards to a foundation
             if (dest.children.length === 0) {
-                return cardData.rank === 'A'; // Only Aces can go on empty foundation
+                return this.draggedCard.dataset.rank === 'A'; // Only Aces can go on empty foundation
             } else {
                 const topCardEl = dest.lastElementChild;
-                if (topCardEl.dataset.suit !== cardData.suit) return false; // Must be same suit as top foundation card
-                return topCardEl.dataset.value === String(cardData.value - 1); // Must be one rank lower than top foundation card
+                if (topCardEl.dataset.suit !== this.draggedCard.dataset.suit) return false; // Must be same suit as top foundation card
+                return topCardEl.dataset.value === String(parseInt(this.draggedCard.dataset.value) - 1); // Must be one rank lower than top foundation card
             }
         } else if (dest.classList.contains('column')) {
             if (dest.children.length === 0) {
@@ -329,7 +412,7 @@ class FreecellGame {
                 return true; // Can place any card on empty column
             } else {
                 const topCardEl = dest.lastElementChild;
-                return topCardEl.dataset.color !== cardData.color && topCardEl.dataset.value === String(cardData.value + 1); // Must be opposite color and one rank higher                
+                return topCardEl.dataset.color !== this.draggedCard.dataset.color && topCardEl.dataset.value === String(parseInt(this.draggedCard.dataset.value) + 1); // Must be opposite color and one rank higher                
             }
         }
         return false;
