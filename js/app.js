@@ -7,7 +7,7 @@ class Card {
         this.value = this.getValue(rank);
         this.color = (suit === 'hearts' || suit === 'diamonds') ? 'red' : 'black';
         this.id = `${suit}-${rank}`;
-        this.element = null;
+        this.element = this.createElement(); // create once, keep forever
     }
 
     getValue(rank) {
@@ -43,7 +43,9 @@ class Card {
             <div class="center-suit">${suit}</div>
         `;
 
-        this.element = el;
+        // Link DOM → model
+        el.cardRef = this;
+
         return el;
     }
 }
@@ -51,15 +53,18 @@ class Card {
 class FreecellGame {
     constructor() {
         this.deck = [];
-        this.freeCells = [[], [], [], []];
-        this.foundations = [[], [], [], []];
-        this.tableau = [[], [], [], [], [], [], [], []];
-        this.draggedCard = null;
-        this.draggedStack = [];
+        this.freeCells = [[], [], [], []];      // arrays of Card
+        this.foundations = [[], [], [], []];    // arrays of Card
+        this.tableau = [[], [], [], [], [], [], [], []]; // arrays of Card
+
+        this.draggedCard = null;   // Card
+        this.draggedStack = [];    // Card[]
         this.touchStartX = 0;
         this.touchStartY = 0;
         this.dragNotTap = false;
         this.tapThreshold = 8; // px movement allowed before it's considered a drag
+        this.history = []; // for undo later
+
         this.init();
     }
 
@@ -104,36 +109,37 @@ class FreecellGame {
         this.deck = [];
     }
 
-    // Render the game state, using createElement() to display the cards objects in each location.
+    // Render from model → DOM, reusing existing elements
     render() {
-        // Render free cells
+        // Free cells
         for (let i = 0; i < 4; i++) {
-            const cell = document.getElementById(`free${i+1}`);
+            const cell = document.getElementById(`free${i + 1}`);
             cell.innerHTML = '';
             if (this.freeCells[i].length > 0) {
-                cell.appendChild(this.freeCells[i][0].createElement());
+                cell.appendChild(this.freeCells[i][0].element);
             }
         }
 
-        // Render foundations
+        // Foundations (top card only for now)
         for (let i = 0; i < 4; i++) {
-            const found = document.getElementById(`found${i+1}`);
+            const found = document.getElementById(`found${i + 1}`);
             found.innerHTML = '';
             if (this.foundations[i].length > 0) {
-                found.appendChild(this.foundations[i][this.foundations[i].length - 1].createElement());
+                const top = this.foundations[i][this.foundations[i].length - 1];
+                found.appendChild(top.element);
             }
         }
 
-        // Render tableau
+        // Tableau
         for (let i = 0; i < 8; i++) {
-            const col = document.getElementById(`col${i+1}`);
+            const col = document.getElementById(`col${i + 1}`);
             col.innerHTML = '';
             for (let card of this.tableau[i]) {
-                col.appendChild(card.createElement());
+                col.appendChild(card.element);
             }
         }
 
-        // After rendering, attempt to auto-move any cards to foundations if possible to keep game flowing smoothly.
+        // After rendering, attempt to auto-move any cards to foundations
         this.autoMoveToFoundation();
     }
 
@@ -154,161 +160,194 @@ class FreecellGame {
         });
     }
 
-    // Touch event handlers for iOS
+    // Helpers to go from DOM → Card and container arrays
+
+    getCardFromElement(el) {
+        return el?.cardRef || null;
+    }
+
+    getPileForElement(containerEl) {
+        if (!containerEl) return null;
+        if (containerEl.classList.contains('cell')) {
+            const idx = ['free1', 'free2', 'free3', 'free4'].indexOf(containerEl.id);
+            return { type: 'cell', index: idx, arr: this.freeCells[idx] };
+        }
+        if (containerEl.classList.contains('foundation')) {
+            const idx = ['found1', 'found2', 'found3', 'found4'].indexOf(containerEl.id);
+            return { type: 'foundation', index: idx, arr: this.foundations[idx] };
+        }
+        if (containerEl.classList.contains('column')) {
+            const idx = parseInt(containerEl.id.slice(3), 10) - 1;
+            return { type: 'column', index: idx, arr: this.tableau[idx] };
+        }
+        return null;
+    }
+
+    // Touch handlers
+
     handleTouchStart(e) {
-        const touch = e.touches[0]; // Get the first (primary) touch point
-        this.touchStartX = touch.clientX; 
+        const touch = e.touches[0];
+        this.touchStartX = touch.clientX;
         this.touchStartY = touch.clientY;
         this.dragNotTap = false;
-        const target = document.elementFromPoint(touch.clientX, touch.clientY); //Finds which DOM element is at that touch coordinates
-        if (target && target.classList.contains('card')) {
-            this.draggedCard = target; // Store the card being dragged
-            // Find the stack
-            const parent = target.parentElement; // Get the container (column, foundation, etc.)
-            const cards = Array.from(parent.children); // Convert child cards to an array
-            const index = cards.indexOf(target); // Find the position of the touched card
-            this.draggedStack = cards.slice(index); // Get all cards from here to the end
-            if (this.preMoveCheckFailed(target)) { // Check if card is trapped by other cards and if there are enough free cells to move the stack
-                this.draggedCard = null;
-                this.draggedStack = [];
-                return;
-            }
-            // Add dragging class to all cards in the stack
-            this.draggedStack.forEach(card => {
-                card.classList.add('dragging'); // makes cards transparent and bring to front while dragging
-            });
+
+        const targetEl = document.elementFromPoint(touch.clientX, touch.clientY)?.closest('.card'); //Finds which DOM element is at that touch coordinates
+        if (!targetEl) return;
+
+        const card = this.getCardFromElement(targetEl);
+        if (!card) return;
+
+        this.draggedCard = card; // Store the card being dragged
+
+        const parentEl = targetEl.parentElement;
+        const pile = this.getPileForElement(parentEl);
+        if (!pile) return;
+
+        const idx = pile.arr.indexOf(card); // Find the position of the touched card
+        this.draggedStack = pile.arr.slice(idx); // Get all cards from here to the end
+
+        if (this.preMoveCheckFailed()) { // Check if card is trapped by other cards and if there are enough free cells to move the stack
+            this.draggedCard = null;
+            this.draggedStack = [];
+            return;
         }
+
+        this.draggedStack.forEach(c => {
+            c.element.classList.add('dragging');
+        });
     }
 
     handleTouchMove(e) {
         e.preventDefault();
-        if (this.draggedCard) {
-            const touch = e.touches[0]; // Get the current touch position
-            const deltaX = touch.clientX - this.touchStartX; // Calculate how far the touch has moved from the start
-            const deltaY = touch.clientY - this.touchStartY;
-
-            // If not a drag yet and movement exceeds tap threshold, consider it a drag
-            if (!this.dragNotTap) {
-                if (Math.abs(deltaX) > this.tapThreshold || Math.abs(deltaY) > this.tapThreshold) {
-                    this.dragNotTap = true; // Now it's a drag
-                }
-            }
-
-            // Move all cards in the dragged stack
-            this.draggedStack.forEach(card => {
-                card.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
-            });
-        }
-    }
-
-    handleTouchEnd(e) {
-        if (this.draggedCard) {
-            // Reset all cards in the dragged stack
-            this.draggedStack.forEach(card => {
-                card.classList.remove('dragging'); // Remove the semi-transparent effect
-                card.style.transform = ''; // Reset position
-            });
-
-            if (this.dragNotTap ) {
-                const touch = e.changedTouches[0]; // Get the final touch position (where finger left screen)
-                const target = document.elementFromPoint(touch.clientX, touch.clientY);
-                this.attemptMove(target); // Check if the move is valid and execute it
-            }
-            else { // This was a tap/click, not a drag.
-                const target = this.findBestTarget();
-                this.attemptMove(target); // Check if the move is valid and execute it
-            }
-            
-            this.draggedCard = null; // Cleanup for next drag
-            this.draggedStack = []; // Cleanup for next drag
-        }
-    }
-
-    // Pointer (mouse + touch unified) handlers so desktop dragging works
-    handlePointerDown(e) {
-        // Only handle primary button / primary touch
-        if (e.isPrimary === false) return;
-        e.preventDefault();
-        this.touchStartX = e.clientX;
-        this.touchStartY = e.clientY;
-        this.dragNotTap = false;
-        const target = document.elementFromPoint(e.clientX, e.clientY); //Finds which DOM element is at that touch coordinates
-        if (target && target.classList.contains('card')) {
-            this.draggedCard = target; // Store the card being dragged
-            const parent = target.parentElement; // Get the container (column, foundation, etc.)
-            const cards = Array.from(parent.children); // Convert child cards to an array
-            const index = cards.indexOf(target); // Find the position of the touched card
-            this.draggedStack = cards.slice(index); // Get all cards from here to the end
-            if (this.preMoveCheckFailed(target)) { // Check if card is trapped by other cards and if there are enough free cells to move the stack
-                this.draggedCard = null;
-                this.draggedStack = [];
-                return;
-            }
-            // Add dragging class to all cards in the stack
-            this.draggedStack.forEach(card => {
-                card.classList.add('dragging'); // makes cards transparent and bring to front while dragging
-            });
-            try { target.setPointerCapture && target.setPointerCapture(e.pointerId); } catch (err) {}
-        }
-    }
-
-    handlePointerMove(e) {
         if (!this.draggedCard) return;
-        e.preventDefault(); // Prevent scrolling while dragging
-        const deltaX = e.clientX - this.touchStartX; // Calculate how far the touch has moved from the start
-        const deltaY = e.clientY - this.touchStartY;
+
+        const touch = e.touches[0]; // Get the current touch position
+        const deltaX = touch.clientX - this.touchStartX;
+        const deltaY = touch.clientY - this.touchStartY;
 
         // If not a drag yet and movement exceeds tap threshold, consider it a drag
         if (!this.dragNotTap) {
             if (Math.abs(deltaX) > this.tapThreshold || Math.abs(deltaY) > this.tapThreshold) {
-                this.dragNotTap = true; // Now it's a drag
+                this.dragNotTap = true;
             }
         }
 
         // Move all cards in the dragged stack
-        this.draggedStack.forEach(card => {
-            card.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
+        this.draggedStack.forEach(c => {
+            c.element.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
+        });
+    }
+
+    handleTouchEnd(e) {
+        if (!this.draggedCard) return;
+
+        this.draggedStack.forEach(c => {
+            c.element.classList.remove('dragging');
+            c.element.style.transform = ''; // Reset position
+        });
+
+        if (this.dragNotTap) {
+            const touch = e.changedTouches[0]; // Get the final touch position (where finger left screen)
+            const targetEl = document.elementFromPoint(touch.clientX, touch.clientY);
+            this.attemptMove(targetEl);
+        } else { // This was a tap/click, not a drag.
+            const targetEl = this.findBestTarget();
+            this.attemptMove(targetEl);
+        }
+
+        this.draggedCard = null; // Cleanup for next drag
+        this.draggedStack = [];  // Cleanup for next drag
+    }
+
+    // Pointer handlers for mouse
+
+    handlePointerDown(e) {
+        if (e.isPrimary === false) return;
+        e.preventDefault();
+
+        this.touchStartX = e.clientX;
+        this.touchStartY = e.clientY;
+        this.dragNotTap = false;
+
+        const targetEl = document.elementFromPoint(e.clientX, e.clientY)?.closest('.card');
+        if (!targetEl) return;
+
+        const card = this.getCardFromElement(targetEl);
+        if (!card) return;
+
+        this.draggedCard = card;
+
+        const parentEl = targetEl.parentElement;
+        const pile = this.getPileForElement(parentEl);
+        if (!pile) return;
+
+        const idx = pile.arr.indexOf(card);
+        this.draggedStack = pile.arr.slice(idx);
+
+        if (this.preMoveCheckFailed()) {
+            this.draggedCard = null;
+            this.draggedStack = [];
+            return;
+        }
+
+        this.draggedStack.forEach(c => {
+            c.element.classList.add('dragging');
+        });
+
+        try { targetEl.setPointerCapture && targetEl.setPointerCapture(e.pointerId); } catch (err) {}
+    }
+
+    handlePointerMove(e) {
+        if (!this.draggedCard) return;
+        e.preventDefault();
+
+        const deltaX = e.clientX - this.touchStartX;
+        const deltaY = e.clientY - this.touchStartY;
+
+        if (!this.dragNotTap) {
+            if (Math.abs(deltaX) > this.tapThreshold || Math.abs(deltaY) > this.tapThreshold) {
+                this.dragNotTap = true;
+            }
+        }
+
+        this.draggedStack.forEach(c => {
+            c.element.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
         });
     }
 
     handlePointerUp(e) {
         if (!this.draggedCard) return;
-        // Reset all cards in the dragged stack
-        this.draggedStack.forEach(card => {
-            card.classList.remove('dragging'); // Remove the semi-transparent effect
-            card.style.transform = ''; // Reset position to snap back if not moved to a valid spot
+
+        this.draggedStack.forEach(c => {
+            c.element.classList.remove('dragging');
+            c.element.style.transform = '';
         });
 
-        if (this.dragNotTap ) {
-            const target = document.elementFromPoint(e.clientX, e.clientY);  //Finds which DOM element is at the release coordinates
-            this.attemptMove(target); // Check if the move is valid and execute it
-        }
-        else { // This was a tap/click, not a drag.
-            const target = this.findBestTarget();
-            this.attemptMove(target); // Check if the move is valid and execute it
+        if (this.dragNotTap) {
+            const targetEl = document.elementFromPoint(e.clientX, e.clientY);
+            this.attemptMove(targetEl);
+        } else {
+            const targetEl = this.findBestTarget();
+            this.attemptMove(targetEl);
         }
 
-        try { this.draggedCard.releasePointerCapture && this.draggedCard.releasePointerCapture(e.pointerId); } catch (err) {}
-        this.draggedCard = null; // Cleanup for next drag
-        this.draggedStack = []; // Cleanup for next drag
+        try { this.draggedCard.element.releasePointerCapture && this.draggedCard.element.releasePointerCapture(e.pointerId); } catch (err) {}
+        this.draggedCard = null;
+        this.draggedStack = [];
     }
 
     // return true if card is trapped by other cards or if there are not enough free cells to move the stack
-    preMoveCheckFailed(target) {
-        // Check stack order
-        for (let i=0; i < this.draggedStack.length - 1; i++) {
-            const currCard = this.draggedStack[i];
-            const nextCard = this.draggedStack[i+1];
-            if (nextCard.dataset.color === currCard.dataset.color) {
-                return true; // If adjacent cards are the same color, target is trapped
-            }
-            if (parseInt(nextCard.dataset.value) !== parseInt(currCard.dataset.value) - 1) {
-                return true; // If adjacent cards are not in descending order, target is trapped
-            }
+    preMoveCheckFailed() {
+        // stack order
+        for (let i = 0; i < this.draggedStack.length - 1; i++) {
+            const curr = this.draggedStack[i];
+            const next = this.draggedStack[i + 1];
+            if (next.color === curr.color) return true; // If adjacent cards are the same color, target is trapped
+            if (next.value !== curr.value - 1) return true; // If adjacent cards are not in descending order, target is trapped
         }
 
         // Check stack size vs free cells
-        const freeCellsAvailable = this.freeCells.filter(cell => cell.length === 0).length;
+        const freeCellsAvailable = this.freeCells.filter(c => c.length === 0).length;
         const emptyColumnsAvailable = this.tableau.filter(col => col.length === 0).length;
         if (this.draggedStack.length > (2 ** emptyColumnsAvailable) * (freeCellsAvailable + 1)) {
             return true; // This rule applies to moving stacks to a non-empty column. Moving to an empty column is more restrictive and checked during the attemptMove.
@@ -317,69 +356,58 @@ class FreecellGame {
     }
 
     findBestTarget() {
-        const currentParent = this.draggedCard.parentElement;
-        if (this.draggedStack.length > 1) { // Moving a stack, so we can only move to a column. Find the first valid column.
+        const currentParentEl = this.draggedCard.element.parentElement;
+        const currentPile = this.getPileForElement(currentParentEl);
+
+        if (!currentPile) return currentParentEl;
+
+        if (this.draggedStack.length > 1) {
+            // stacks → only columns
             for (let i = 0; i < 8; i++) {
-                const col = document.getElementById(`col${i+1}`);
-                if (col === currentParent) continue; // Can't move to the same column
-                if (col.children.length !== 0) { // Check not empty first
-                    if (this.isValidMove(currentParent, col)) return col;  
-                }
-            }
-            for (let i = 0; i < 8; i++) {
-                const col = document.getElementById(`col${i+1}`);
-                if (col === currentParent) continue; // Can't move to the same column
-                if (col.children.length === 0) { // Check  empty next
-                    if (this.isValidMove(currentParent, col)) return col;  
-                }
-            }
-        } else { // Moving a single card, so we can move to column, free cell, or foundation
-            for (let i = 0; i < 8; i++) {
-                const col = document.getElementById(`col${i+1}`);
-                if (col === currentParent) continue; // Can't move to the same column
-                if (col.children.length !== 0) { // Check not empty first
-                    if (this.isValidMove(currentParent, col)) return col;  
-                }
-            }
-            for (let i = 0; i < 4; i++) { // Check free cells next
-                const cell = document.getElementById(`free${i+1}`);
-                if (this.isValidMove(currentParent, cell)) return cell;
+                const colEl = document.getElementById(`col${i + 1}`);
+                if (colEl === currentParentEl) continue; // Can't move to the same column
+                if (colEl.children.length !== 0 && this.isValidMove(currentParentEl, colEl)) return colEl; // non empty columns first
             }
             for (let i = 0; i < 8; i++) {
-                const col = document.getElementById(`col${i+1}`);
-                if (col === currentParent) continue; // Can't move to the same column
-                if (col.children.length === 0) { // Check  empty columns after empty free cells
-                    if (this.isValidMove(currentParent, col)) return col;  
-                }
+                const colEl = document.getElementById(`col${i + 1}`);
+                if (colEl === currentParentEl) continue; // Can't move to the same column
+                if (colEl.children.length === 0 && this.isValidMove(currentParentEl, colEl)) return colEl; // empty columns second (more restrictive, so lower priority)
             }
-            for (let i = 0; i < 4; i++) { // Check foundations last
-                const foundation = document.getElementById(`found${i+1}`);
-                if (this.isValidMove(currentParent, foundation)) return foundation;
+        } else {
+            // single card
+            for (let i = 0; i < 8; i++) {
+                const colEl = document.getElementById(`col${i + 1}`);
+                if (colEl === currentParentEl) continue; // Can't move to the same column
+                if (colEl.children.length !== 0 && this.isValidMove(currentParentEl, colEl)) return colEl; // non empty columns first
+            }
+            for (let i = 0; i < 4; i++) {
+                const cellEl = document.getElementById(`free${i + 1}`); // free cells before empty columns for single cards, since free cells are more flexible for future moves
+                if (this.isValidMove(currentParentEl, cellEl)) return cellEl;
+            }
+            for (let i = 0; i < 8; i++) {
+                const colEl = document.getElementById(`col${i + 1}`);
+                if (colEl === currentParentEl) continue; // Can't move to the same column
+                if (colEl.children.length === 0 && this.isValidMove(currentParentEl, colEl)) return colEl; // empty columns next (more restrictive, so lower priority)
+            }
+            for (let i = 0; i < 4; i++) {
+                const foundEl = document.getElementById(`found${i + 1}`); // foundations last since they are most restrictive and can only take single cards
+                if (this.isValidMove(currentParentEl, foundEl)) return foundEl;
             }
         }
-        console.log('No valid move found for tap/click');
-        return currentParent; // No valid move, return original parent to snap back
+
+        return currentParentEl; // No valid move, return original parent to snap back
     }
 
-    attemptMove(target) {
-        // Determine source and destination
-        const source = this.draggedCard.parentElement;
-        const dest = target.closest('.cell, .foundation, .column') || target.parentElement.closest('.cell, .foundation, .column');
+    attemptMove(targetEl) {
+        if (!targetEl) return;
 
-        if (!dest || source === dest) return;
+        const sourceEl = this.draggedCard.element.parentElement;
+        const destEl = targetEl.closest('.cell, .foundation, .column') || targetEl.parentElement?.closest('.cell, .foundation, .column');
 
-        // Get card data
-        /*const cardData = {
-            suit: this.draggedCard.dataset.suit,
-            rank: this.draggedCard.dataset.rank,
-            value: parseInt(this.draggedCard.dataset.value),
-            color: this.draggedCard.dataset.color
-        };*/
+        if (!destEl || sourceEl === destEl) return;
 
-        // Check if move is valid using the same card info as before
-        if (this.isValidMove(source, dest)) {
-            const cardId = this.draggedCard.dataset.cardId;
-            this.moveCard(source, dest, cardId);
+        if (this.isValidMove(sourceEl, destEl)) {
+            this.moveCard(sourceEl, destEl, this.draggedCard.id);
             this.render();
             if (this.checkWin()) {
                 alert('You win!');
@@ -387,178 +415,158 @@ class FreecellGame {
         }
     }
 
-    isValidMove(source, dest) {
-        //return true; //DEBUG
-        //console.log(`Checking move validity from ${source.id} to ${dest ? dest.id : 'null'}`);
-        if (!dest) return false; // Invalid drop target
-        // Implement Freecell move rules
-        if (dest.classList.contains('cell')) {
+    // isValidMove now uses model via draggedCard / piles, but still keyed by DOM containers
+    isValidMove(sourceEl, destEl) {
+        if (!destEl) return false;
+
+        const sourcePile = this.getPileForElement(sourceEl);
+        const destPile = this.getPileForElement(destEl);
+        if (!sourcePile || !destPile) return false;
+
+        const movingCard = this.draggedCard;
+        if (!movingCard) return false;
+
+        if (destEl.classList.contains('cell')) {
             if (this.draggedStack.length > 1) return false; // Can't move multiple cards to a free cell
-            return dest.children.length === 0; // Can only place on empty free cell
-        } else if (dest.classList.contains('foundation')) {
+            return destEl.children.length === 0; // Can only place on empty free cell
+        }
+
+        if (destEl.classList.contains('foundation')) {
             if (this.draggedStack.length > 1) return false; // Can't move multiple cards to a foundation
-            if (dest.children.length === 0) {
-                return this.draggedCard.dataset.rank === 'A'; // Only Aces can go on empty foundation
+            if (destEl.children.length === 0) {
+                return movingCard.rank === 'A'; // Only Aces can go on empty foundation
             } else {
-                const topCardEl = dest.lastElementChild;
-                if (topCardEl.dataset.suit !== this.draggedCard.dataset.suit) return false; // Must be same suit as top foundation card
-                return topCardEl.dataset.value === String(parseInt(this.draggedCard.dataset.value) - 1); // Must be one rank lower than top foundation card
+                const topCard = destPile.arr[destPile.arr.length - 1];
+                if (topCard.suit !== movingCard.suit) return false; // Must be same suit as top foundation card
+                return topCard.value === movingCard.value - 1; // Must be one rank lower than top foundation card
             }
-        } else if (dest.classList.contains('column')) {
-            if (dest.children.length === 0) {
-                // preMoveCheck assumes moving to non-empty column, so we need to check empty column move validity here.
-                const freeCellsAvailable = this.freeCells.filter(cell => cell.length === 0).length;
+        }
+
+        if (destEl.classList.contains('column')) {
+            if (destEl.children.length === 0) {
+                const freeCellsAvailable = this.freeCells.filter(c => c.length === 0).length;
                 const emptyColumnsAvailable = this.tableau.filter(col => col.length === 0).length - 1; // Exclude the destination column since it can't be used.
                 if (this.draggedStack.length > (2 ** emptyColumnsAvailable) * (freeCellsAvailable + 1)) {
                     return false;
                 }
                 return true; // Can place any card on empty column
             } else {
-                const topCardEl = dest.lastElementChild;
-                return topCardEl.dataset.color !== this.draggedCard.dataset.color && topCardEl.dataset.value === String(parseInt(this.draggedCard.dataset.value) + 1); // Must be opposite color and one rank higher                
+                const topCard = destPile.arr[destPile.arr.length - 1];
+                return topCard.color !== movingCard.color && topCard.value === movingCard.value + 1; // Must be opposite color and one rank higher
             }
         }
+
         return false;
     }
 
-    moveCard(source, dest, cardId) {
-        // Move the actual Card instance(s) from source arrays to destination arrays
-        // Find and remove from the correct source array
-        if (source.classList.contains('cell')) {
-            const index = ['free1', 'free2', 'free3', 'free4'].indexOf(source.id);
-            const arr = this.freeCells[index];
-            const i = arr.findIndex(c => c.id === cardId);
-            if (i === -1) return;
-            const card = arr.splice(i, 1)[0];
-            const destIndex = ['free1', 'free2', 'free3', 'free4'].indexOf(dest.id);
-            if (dest.classList.contains('cell')) {
-                this.freeCells[destIndex].push(card);
-            } else if (dest.classList.contains('foundation')) {
-                const fIndex = ['found1', 'found2', 'found3', 'found4'].indexOf(dest.id);
-                this.foundations[fIndex].push(card);
-            } else if (dest.classList.contains('column')) {
-                const tIndex = parseInt(dest.id.slice(3)) - 1;
-                this.tableau[tIndex].push(card);
-            }
-            return;
-        } else if (source.classList.contains('foundation')) {
-            const index = ['found1', 'found2', 'found3', 'found4'].indexOf(source.id);
-            const arr = this.foundations[index];
-            const i = arr.findIndex(c => c.id === cardId);
-            if (i === -1) return;
-            const card = arr.splice(i, 1)[0];
-            if (dest.classList.contains('cell')) {
-                const destIndex = ['free1', 'free2', 'free3', 'free4'].indexOf(dest.id);
-                this.freeCells[destIndex].push(card);
-            } else if (dest.classList.contains('foundation')) {
-                const fIndex = ['found1', 'found2', 'found3', 'found4'].indexOf(dest.id);
-                this.foundations[fIndex].push(card);
-            } else if (dest.classList.contains('column')) {
-                const tIndex = parseInt(dest.id.slice(3)) - 1;
-                this.tableau[tIndex].push(card);
-            }
-            return;
-        } else if (source.classList.contains('column')) {
-            const index = parseInt(source.id.slice(3)) - 1;
-            const arr = this.tableau[index];
-            const startIdx = arr.findIndex(c => c.id === cardId);
-            if (startIdx === -1) return;
-            // Remove the sequence from startIdx to end (support moving stacks)
-            const moving = arr.splice(startIdx);
-            if (dest.classList.contains('column')) {
-                const destIndex = parseInt(dest.id.slice(3)) - 1;
-                this.tableau[destIndex].push(...moving);
-            } else if (dest.classList.contains('cell')) {
-                const destIndex = ['free1', 'free2', 'free3', 'free4'].indexOf(dest.id);
-                if (moving.length === 1) this.freeCells[destIndex].push(moving[0]);
-            } else if (dest.classList.contains('foundation')) {
-                const fIndex = ['found1', 'found2', 'found3', 'found4'].indexOf(dest.id);
-                if (moving.length === 1) this.foundations[fIndex].push(moving[0]);
-            }
-            return;
+    // Move Card(s) in model arrays, DOM follows via render()
+    moveCard(sourceEl, destEl, cardId) {
+        const sourcePile = this.getPileForElement(sourceEl);
+        const destPile = this.getPileForElement(destEl);
+        if (!sourcePile || !destPile) return;
+
+        const arr = sourcePile.arr;
+
+        const startIdx = arr.findIndex(c => c.id === cardId);
+        if (startIdx === -1) return;
+
+        let moving;
+        if (sourcePile.type === 'column') {
+            moving = arr.splice(startIdx);
+        } else {
+            moving = arr.splice(startIdx, 1);
+        }
+
+        if (destPile.type === 'column') {
+            destPile.arr.push(...moving);
+        } else if (destPile.type === 'cell' || destPile.type === 'foundation') {
+            if (moving.length === 1) destPile.arr.push(moving[0]);
         }
     }
 
-    // Automatically move any card to a foundation if it's a valid move, and repeat until no more auto moves are possible.
-    // This is called after every successful move to keep the game flowing smoothly.
     autoMoveToFoundation() {
-        for (let i = 1; i <= 12; i++) { // For all columns and free cells
-            let colCell;
+        // iterate columns + free cells
+        for (let i = 1; i <= 12; i++) {
+            let containerEl;
             if (i <= 8) {
-                colCell = document.getElementById(`col${i}`);
+                containerEl = document.getElementById(`col${i}`);
             } else {
-                colCell = document.getElementById(`free${i-8}`);
+                containerEl = document.getElementById(`free${i - 8}`);
             }
+            if (!containerEl || containerEl.children.length === 0) continue; // If empty no card to move
 
-            if (!colCell ||colCell.children.length === 0) continue; // If empty no card to move
+            const pile = this.getPileForElement(containerEl);
+            if (!pile || pile.arr.length === 0) continue;
 
-            //const movingCard = colCell.lastElementChild;
-            this.draggedCard = colCell.lastElementChild;
-            //const movingSuit = movingCard.dataset.suit;
-            const movingValue = parseInt(this.draggedCard.dataset.value);
-            const movingColor = this.draggedCard.dataset.color;
+            const movingCard = pile.arr[pile.arr.length - 1];
+            this.draggedCard = movingCard;
+            this.draggedStack = [movingCard];
 
-            
-            //console.log(`Checking auto-move for ${this.draggedCard.dataset.rank} of ${this.draggedCard.dataset.suit}`);
+            const movingValue = movingCard.value;
+            const movingColor = movingCard.color;
+
             if (movingValue === 1 || movingValue === 2) { // Ace or 2 can always move to foundation without additional check.
-                for (let i = 0; i < 4; i++) {
-                    const foundation = document.getElementById(`found${i+1}`);
-                    if (this.isValidMove(colCell, foundation)) { // Find valid foundation to move to.
-                        this.moveCard(colCell, foundation, this.draggedCard.dataset.cardId);
+                for (let j = 0; j < 4; j++) {
+                    const foundationEl = document.getElementById(`found${j + 1}`);
+                    if (this.isValidMove(containerEl, foundationEl)) {
+                        this.moveCard(containerEl, foundationEl, movingCard.id);
                         this.render();
-                        return; // done
+                        this.draggedCard = null;
+                        this.draggedStack = [];
+                        return;
                     }
                 }
-            }
-            else {
-                // Find valid foundation to move to.
-                let foundatationTarget = null;
-                for (let i = 0; i < 4; i++) {
-                    const foundation = document.getElementById(`found${i+1}`);
-                    if (this.isValidMove(colCell, foundation)) { 
-                        foundatationTarget = foundation;
+            } else {
+                let foundationTargetEl = null;
+                for (let j = 0; j < 4; j++) {
+                    const foundationEl = document.getElementById(`found${j + 1}`);
+                    if (this.isValidMove(containerEl, foundationEl)) {
+                        foundationTargetEl = foundationEl;
                         break;
                     }
                 }
-                if (!foundatationTarget) {
-                    //console.log(`No valid foundation to auto-move ${this.draggedCard.dataset.rank} of ${this.draggedCard.dataset.suit}`);
+                if (!foundationTargetEl) {
                     continue; // No valid foundation to move to, skip checks
                 }
-                console.log(`Found valid foundation to auto-move ${this.draggedCard.dataset.rank} of ${this.draggedCard.dataset.suit}`);
 
                 // Only move if the card is not needed in the tableau anymore
                 let readyToMove = 0;
-                for (let i = 0; i < 4; i++) {
-                    const foundation = document.getElementById(`found${i+1}`);
-                    if (foundation.children.length > 0) {
-                        const topFoundationCard = foundation.lastElementChild;
-                        console.log(`Checking foundation ${foundation.id} with top card ${topFoundationCard.dataset.value} of ${topFoundationCard.dataset.suit} against moving card ${movingColor} ${movingValue}`);
-                        if (movingColor === 'red') {
-                            if (topFoundationCard.dataset.suit === 'clubs' && parseInt(topFoundationCard.dataset.value) >= movingValue - 2) {
-                                readyToMove++;
-                            }
-                            if (topFoundationCard.dataset.suit === 'spades' && parseInt(topFoundationCard.dataset.value) >= movingValue - 2) {
-                                readyToMove++;
-                            }
-                        } else { // movingColor === 'black'
-                            if (topFoundationCard.dataset.suit === 'hearts' && parseInt(topFoundationCard.dataset.value) >= movingValue - 2) {
-                                readyToMove++;
-                            }
-                            if (topFoundationCard.dataset.suit === 'diamonds' && parseInt(topFoundationCard.dataset.value) >= movingValue - 2) {
-                                readyToMove++;
-                            }
+                for (let j = 0; j < 4; j++) {
+                    const foundationEl = document.getElementById(`found${j + 1}`);
+                    const fPile = this.getPileForElement(foundationEl);
+                    if (!fPile || fPile.arr.length === 0) continue;
+
+                    const topFoundationCard = fPile.arr[fPile.arr.length - 1];
+
+                    if (movingColor === 'red') {
+                        if (topFoundationCard.suit === 'clubs' && topFoundationCard.value >= movingValue - 2) {
+                            readyToMove++;
+                        }
+                        if (topFoundationCard.suit === 'spades' && topFoundationCard.value >= movingValue - 2) {
+                            readyToMove++;
+                        }
+                    } else { // movingColor === 'black'
+                        if (topFoundationCard.suit === 'hearts' && topFoundationCard.value >= movingValue - 2) {
+                            readyToMove++;
+                        }
+                        if (topFoundationCard.suit === 'diamonds' && topFoundationCard.value >= movingValue - 2) {
+                            readyToMove++;
                         }
                     }
-                    console.log(`Foundation ${foundation.id} has ${foundation.children.length} cards. readyToMove = ${readyToMove}`);
                 }
-                console.log(`Auto-move check for ${this.draggedCard.dataset.rank} of ${this.draggedCard.dataset.suit}: readyToMove = ${readyToMove}`);
+
                 if (readyToMove === 2) {
-                    this.moveCard(colCell, foundatationTarget, this.draggedCard.dataset.cardId);
+                    this.moveCard(containerEl, foundationTargetEl, movingCard.id);
                     this.render();
-                    return; // done
+                    this.draggedCard = null;
+                    this.draggedStack = [];
+                    return;
                 }
-            } // end of 3 - King check
-        } // end of loop through columns and free cells
+            }
+        }
+
+        this.draggedCard = null;
+        this.draggedStack = [];
     }
 
     checkWin() {
@@ -566,7 +574,6 @@ class FreecellGame {
     }
 
     clearCacheAndReset() {
-        // Clear all caches and unregister service workers
         if ('caches' in window) {
             caches.keys().then(names => {
                 names.forEach(name => {
@@ -583,7 +590,6 @@ class FreecellGame {
             });
         }
 
-        // Reset the game
         this.resetGame();
     }
 
@@ -592,14 +598,17 @@ class FreecellGame {
         this.freeCells = [[], [], [], []];
         this.foundations = [[], [], [], []];
         this.tableau = [[], [], [], [], [], [], [], []];
+        this.draggedCard = null;
+        this.draggedStack = [];
+        this.history = [];
         this.init();
     }
 
     registerServiceWorker() {
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('/sw.js')
-                .then(registration => console.log('SW registered'))
-                .catch(error => console.log('SW registration failed'));
+                .then(() => console.log('SW registered'))
+                .catch(() => console.log('SW registration failed'));
         }
     }
 }
