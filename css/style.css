@@ -8,6 +8,7 @@ body {
     flex-direction: column;
     align-items: center;
     min-height: 100vh;
+    touch-action: manipulation; /* Disables touch double-tap zoom */
 }
 
 #game {
@@ -28,14 +29,14 @@ body {
     display: flex;
     flex-direction: row;
     justify-content: flex-end;
-    width: 48%;
+    width: 50%;
 }
 
 #foundations {
     display: flex;
     flex-direction: row;
     justify-content: flex-start;
-    width: 48%;
+    width: 50%;
 }
 
 #tableau {
@@ -106,6 +107,7 @@ body {
     cursor: pointer;
     user-select: none;
     position: relative;
+    touch-action: manipulation; /* Disables touch double-tap zoom */
 }
 
 /* Card corner layout */
@@ -131,6 +133,42 @@ body {
     pointer-events: none; /* Allow clicks to pass through corners to the card itself */
 }
 
+.number-bar {
+    position: fixed;
+    display: flex;
+}
+
+.num {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    color: #005c00;
+    touch-action: manipulation;
+    user-select: none;
+}
+
+.top-button {
+    position: fixed;
+    top: calc(env(safe-area-inset-top) + 10px); /* Adjust for safe area inset on mobile devices */
+    font-size: 24px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    padding: 10px;
+    touch-action: manipulation;
+}
+
+.settings {
+    left: 10px;
+}
+
+.undo {
+    right: 10px;
+}
+
 /* Portrait: height > width */
 @media (max-aspect-ratio: 1/1) {
     .column, .cell, .foundation {
@@ -150,14 +188,16 @@ body {
         font-size: clamp(8px, 2vw, 18px); /* scalable base */
         /*font-size: 10px;*/
     }
-    /*.card .corner.tl { top: 3px; left: 3px; }
-    .card .corner.tr { top: 1px; right: 3px; }
-    .card .corner.bl { bottom: 3px; left: 3px; }
-    .card .corner.br { bottom: 3px; right: 3px; }
-    .card .corner { font-size: 12px; }
-    .card .corner.rank { font-size: 16px; }
-    .card .corner.suit { font-size: 20px; }
-    .card .center-suit { font-size: 36px; }*/
+    .number-bar {
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 5vh;
+        flex-direction: row;
+    }
+    .num {
+        font-size: clamp(8px, 2vw, 18px); /* scalable base */
+    }
 }
 
 /* Landscape: width > height */
@@ -172,7 +212,7 @@ body {
     #foundations, #free-cells {
         margin-top: 5vh;
         margin-bottom: 1vh;
-        width: 40%;
+        justify-content: center;
     }
     #tableau {
         justify-content: center;
@@ -188,14 +228,16 @@ body {
         font-size: clamp(8px, 2vh, 18px); /* scalable base */
         /*font-size: 18px;*/
     }
-    /*.card .corner.tl { top: 4px; left: 4px; }
-    .card .corner.tr { top: 1px; right: 4px; }
-    .card .corner.bl { bottom: 4px; left: 4px; }
-    .card .corner.br { bottom: 4px; right: 4px; }
-    .card .corner { font-size: 32px; }
-    .card .corner.rank { font-size: 24px; }
-    .card .corner.suit { font-size: 30px; }
-    .card .center-suit { font-size: 64px; }*/
+    .number-bar {
+        top: 15vh; /* Don't start at the very top to avoid overlapping with the top button */
+        bottom: 0;
+        right: 0;
+        width: 5vw;
+        flex-direction: column;
+    }
+    .num {
+        font-size: clamp(8px, 2vh, 18px); /* scalable base */
+    }
 }
 
 
@@ -224,36 +266,4 @@ body {
 .card.dragging {
     /* opacity: 0.5; */
     z-index: 1000;
-}
-
-#new-game {
-    margin-top: 20px;
-    padding: 10px 20px;
-    background-color: #007bff;
-    color: white;
-    border: none;
-    border-radius: 5px;
-    cursor: pointer;
-}
-
-#new-game:hover {
-    background-color: #0056b3;
-}
-
-/* App version badge fixed to bottom center (safe for iOS notch/home indicator) */
-#app-version {
-    position: fixed;
-    left: 0;
-    right: 0;
-    bottom: env(safe-area-inset-bottom, 8px);
-    text-align: center;
-    font-size: 12px;
-    color: rgba(255,255,255,0.85);
-    pointer-events: none;
-    -webkit-user-select: none;
-    user-select: none;
-}
-
-@media (max-width: 480px) {
-    #app-version { font-size: 11px; }
 }
