@@ -156,7 +156,7 @@ class FreecellGame {
         document.addEventListener('pointercancel', this.handlePointerUp.bind(this));
 
         document.addEventListener('click', (e) => {
-            const button = e.target.closest('.top-btn');
+            const button = e.target.closest('.top-button');
             if (!button) return;
 
             const action = button.dataset.action;
@@ -166,9 +166,9 @@ class FreecellGame {
                     //undoLastMove();
                     break;
 
-                case 'options':
+                case 'settings':
                     this.clearCacheAndReset();
-                    //openOptionsMenu();
+                    //openSettingsMenu();
                     break;
             }
         });

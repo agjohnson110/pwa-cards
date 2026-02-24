@@ -16,6 +16,7 @@ body {
     flex-direction: column;
     align-items: center;
     width: 100%;
+    flex: 1;
 }
 
 #top-area {
@@ -43,6 +44,8 @@ body {
     display: flex;
     justify-content: space-around;
     width: 100%;
+    flex: 1;
+    align-items: stretch; /* Ensure columns stretch to fill available vertical space, should be default */
 }
 
 .cell, .foundation {
@@ -57,8 +60,6 @@ body {
 }
 
 .column {
-    min-height: 250px;
-    border-radius: 8%;
     background-color: rgba(255, 255, 255, 0);
     position: relative;
 }
@@ -151,22 +152,23 @@ body {
 
 .top-button {
     position: fixed;
-    top: calc(env(safe-area-inset-top) + 10px); /* Adjust for safe area inset on mobile devices */
+    /*top: calc(env(safe-area-inset-top) + 10px); /* Adjust for safe area inset on mobile devices */
+    top: 0;
     font-size: 24px;
-    background-color: #007bff;
+    background-color: #4e4e4e;
     color: white;
     border: none;
-    border-radius: 5px;
-    padding: 10px;
+    border-radius: 50%;
+    margin: 0.5vh;
     touch-action: manipulation;
 }
 
 .settings {
-    left: 10px;
+    left: 0;
 }
 
 .undo {
-    right: 10px;
+    right: 0;
 }
 
 /* Portrait: height > width */
@@ -197,6 +199,11 @@ body {
     }
     .num {
         font-size: clamp(8px, 2vw, 18px); /* scalable base */
+    }
+    .top-button {
+        font-size: 24px;
+        width: 6vh;
+        height: 4vh;
     }
 }
 
@@ -237,6 +244,11 @@ body {
     }
     .num {
         font-size: clamp(8px, 2vh, 18px); /* scalable base */
+    }
+    .top-button {
+        font-size: 40px;
+        width: 8vh;
+        height: 8vh;
     }
 }
 
