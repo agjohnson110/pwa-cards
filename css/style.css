@@ -155,9 +155,11 @@ body {
     /*top: calc(env(safe-area-inset-top) + 10px); /* Adjust for safe area inset on mobile devices */
     top: 0;
     font-size: 24px;
-    background-color: #4e4e4e;
+    /*background-color: #4e4e4e;*/
+    background-color: #008000;
     color: white;
     border: none;
+    /*border: 1px solid #005c00;*/
     border-radius: 50%;
     margin: 0.5vh;
     touch-action: manipulation;

@@ -66,6 +66,7 @@ class FreecellGame {
         this.history = []; // for undo later
 
         this.init();
+        this.addEventListeners();  // only once, not on every init reset
     }
 
     init() {
@@ -73,7 +74,6 @@ class FreecellGame {
         this.shuffleDeck();
         this.dealCards();
         this.render();
-        this.addEventListeners();
         this.registerServiceWorker();
     }
 
@@ -276,6 +276,7 @@ class FreecellGame {
     // Pointer handlers for mouse
 
     handlePointerDown(e) {
+        if (e.pointerType === 'touch') return; // already handled by touch events
         if (e.isPrimary === false) return;
         e.preventDefault();
 
@@ -312,6 +313,7 @@ class FreecellGame {
     }
 
     handlePointerMove(e) {
+        if (e.pointerType === 'touch') return; // already handled by touch events
         if (!this.draggedCard) return;
         e.preventDefault();
 
@@ -330,6 +332,7 @@ class FreecellGame {
     }
 
     handlePointerUp(e) {
+        if (e.pointerType === 'touch') return; // already handled by touch events
         if (!this.draggedCard) return;
 
         this.draggedStack.forEach(c => {
