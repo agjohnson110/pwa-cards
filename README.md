@@ -4,7 +4,7 @@ card based games
 ## Freecell PWA
 A Progressive Web App for installable, offline Freecell solitaire, optimized for iPad and iPhone.
 
-### Setup
+### Test Setup
 1. Run a local server: `python -m http.server 8000` in VS Code terminal
 2. Open `http://localhost:8000` in your browser
 3. For mobile: Access the IP of your machine on port 8000

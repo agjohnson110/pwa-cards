@@ -180,21 +180,21 @@ class FreecellGame {
         return el?.cardRef || null;
     }
 
+    // return the type of container (free cell, foundation, column) and the corresponding array in the model based on the DOM element
     getPileForElement(containerEl) {
         if (!containerEl) return null;
-        if (containerEl.classList.contains('cell')) {
-            const idx = ['free1', 'free2', 'free3', 'free4'].indexOf(containerEl.id);
-            return { type: 'cell', index: idx, arr: this.freeCells[idx] };
+
+        const type = containerEl.dataset.pileType; // dataset.pileType comes from data-pile-type in html. Separate from class since class is used for styling and may have multiple values, while data-pile-type is strictly for identifying the type of pile.
+        const index = parseInt(containerEl.dataset.pileIndex, 10);
+
+        if (isNaN(index) || !type) return null;  // element isn't a pile container
+
+        switch (type) {
+            case 'cell':       return { type, index, arr: this.freeCells[index] }; //property name can automatch variable name (type: type)
+            case 'foundation': return { type, index, arr: this.foundations[index] };
+            case 'column':     return { type, index, arr: this.tableau[index] };
+            default:           return null;
         }
-        if (containerEl.classList.contains('foundation')) {
-            const idx = ['found1', 'found2', 'found3', 'found4'].indexOf(containerEl.id);
-            return { type: 'foundation', index: idx, arr: this.foundations[idx] };
-        }
-        if (containerEl.classList.contains('column')) {
-            const idx = parseInt(containerEl.id.slice(3), 10) - 1;
-            return { type: 'column', index: idx, arr: this.tableau[idx] };
-        }
-        return null;
     }
 
     // Touch handlers
@@ -218,7 +218,7 @@ class FreecellGame {
         if (!pile) return;
 
         const idx = pile.arr.indexOf(card); // Find the position of the touched card
-        this.draggedStack = pile.arr.slice(idx); // Get all cards from here to the end
+        this.draggedStack = pile.arr.slice(idx); // Get all cards from here to the end. slice is shallow copy - has references to orginal card objects, which is what we want since we will be modifying these same objects when we move them between piles.
 
         if (this.preMoveCheckFailed()) { // Check if card is trapped by other cards and if there are enough free cells to move the stack
             this.draggedCard = null;
@@ -370,46 +370,40 @@ class FreecellGame {
     }
 
     findBestTarget() {
-        const currentParentEl = this.draggedCard.element.parentElement;
-        const currentPile = this.getPileForElement(currentParentEl);
+        const card = this.draggedCard;
+        const stack = this.draggedStack;
+        const cardParentEl = card.element.parentElement;
+        const currentPile = this.getPileForElement(cardParentEl);
 
-        if (!currentPile) return currentParentEl;
+        // Build candidate piles with their DOM elements attached
+        const columnPiles = this.tableau.map((arr, i) => ({
+            type: 'column', index: i, arr,
+            el: document.getElementById(`col${i + 1}`)
+        }));
+        const cellPiles = this.freeCells.map((arr, i) => ({
+            type: 'cell', index: i, arr,
+            el: document.getElementById(`free${i + 1}`)
+        }));
+        const foundationPiles = this.foundations.map((arr, i) => ({
+            type: 'foundation', index: i, arr,
+            el: document.getElementById(`found${i + 1}`)
+        }));
 
-        if (this.draggedStack.length > 1) {
-            // stacks → only columns
-            for (let i = 0; i < 8; i++) {
-                const colEl = document.getElementById(`col${i + 1}`);
-                if (colEl === currentParentEl) continue; // Can't move to the same column
-                if (colEl.children.length !== 0 && this.isValidMove(currentParentEl, colEl)) return colEl; // non empty columns first
-            }
-            for (let i = 0; i < 8; i++) {
-                const colEl = document.getElementById(`col${i + 1}`);
-                if (colEl === currentParentEl) continue; // Can't move to the same column
-                if (colEl.children.length === 0 && this.isValidMove(currentParentEl, colEl)) return colEl; // empty columns second (more restrictive, so lower priority)
-            }
-        } else {
-            // single card
-            for (let i = 0; i < 8; i++) {
-                const colEl = document.getElementById(`col${i + 1}`);
-                if (colEl === currentParentEl) continue; // Can't move to the same column
-                if (colEl.children.length !== 0 && this.isValidMove(currentParentEl, colEl)) return colEl; // non empty columns first
-            }
-            for (let i = 0; i < 4; i++) {
-                const cellEl = document.getElementById(`free${i + 1}`); // free cells before empty columns for single cards, since free cells are more flexible for future moves
-                if (this.isValidMove(currentParentEl, cellEl)) return cellEl;
-            }
-            for (let i = 0; i < 8; i++) {
-                const colEl = document.getElementById(`col${i + 1}`);
-                if (colEl === currentParentEl) continue; // Can't move to the same column
-                if (colEl.children.length === 0 && this.isValidMove(currentParentEl, colEl)) return colEl; // empty columns next (more restrictive, so lower priority)
-            }
-            for (let i = 0; i < 4; i++) {
-                const foundEl = document.getElementById(`found${i + 1}`); // foundations last since they are most restrictive and can only take single cards
-                if (this.isValidMove(currentParentEl, foundEl)) return foundEl;
-            }
+        if (stack.length > 1) {
+            // Stacks: non-empty columns first, empty columns second (only columns can take stacks, can't move to own column)
+            const hit =
+                columnPiles.find(p => p.el !== cardParentEl && p.arr.length > 0 && this.isValidMove(card, stack, p)) ||
+                columnPiles.find(p => p.el !== cardParentEl && p.arr.length === 0 && this.isValidMove(card, stack, p));
+            return hit?.el || cardParentEl;
         }
+        // Single card: non-empty columns → free cells → empty columns → foundations
+        const hit =
+            columnPiles.find(p => p.el !== cardParentEl && p.arr.length > 0 && this.isValidMove(card, stack, p)) ||
+            cellPiles.find(p => currentPile?.type !== 'cell' &&                this.isValidMove(card, stack, p)) ||
+            columnPiles.find(p => p.el !== cardParentEl && p.arr.length === 0 && this.isValidMove(card, stack, p)) ||
+            foundationPiles.find(p =>                                          this.isValidMove(card, stack, p));
 
-        return currentParentEl; // No valid move, return original parent to snap back
+        return hit?.el || cardParentEl; // If no valid move, return original parent to snap back    
     }
 
     attemptMove(targetEl) {
@@ -420,54 +414,41 @@ class FreecellGame {
 
         if (!destEl || sourceEl === destEl) return;
 
-        if (this.isValidMove(sourceEl, destEl)) {
+        const destPile = this.getPileForElement(destEl);
+        if (!destPile) return;
+
+        if (this.isValidMove(this.draggedCard, this.draggedStack, destPile)) {
+            //FUTURE this.saveHistory();
             this.moveCard(sourceEl, destEl, this.draggedCard.id);
             this.render();
-            if (this.checkWin()) {
-                alert('You win!');
-            }
+            if (this.checkWin()) alert('You win!');
         }
     }
 
-    // isValidMove now uses model via draggedCard / piles, but still keyed by DOM containers
-    isValidMove(sourceEl, destEl) {
-        if (!destEl) return false;
+    // Model based move validation using (Card, Card[], and pile())
+    isValidMove(movingCard, movingStack, destPile) {
+        if (!destPile) return false;
 
-        const sourcePile = this.getPileForElement(sourceEl);
-        const destPile = this.getPileForElement(destEl);
-        if (!sourcePile || !destPile) return false;
-
-        const movingCard = this.draggedCard;
-        if (!movingCard) return false;
-
-        if (destEl.classList.contains('cell')) {
-            if (this.draggedStack.length > 1) return false; // Can't move multiple cards to a free cell
-            return destEl.children.length === 0; // Can only place on empty free cell
+        if (destPile.type === 'cell') {
+            if (movingStack.length > 1) return false; // Can't move multiple cards to a free cell
+            return destPile.arr.length === 0; // Can only place on empty free cell
         }
 
-        if (destEl.classList.contains('foundation')) {
-            if (this.draggedStack.length > 1) return false; // Can't move multiple cards to a foundation
-            if (destEl.children.length === 0) {
-                return movingCard.rank === 'A'; // Only Aces can go on empty foundation
-            } else {
-                const topCard = destPile.arr[destPile.arr.length - 1];
-                if (topCard.suit !== movingCard.suit) return false; // Must be same suit as top foundation card
-                return topCard.value === movingCard.value - 1; // Must be one rank lower than top foundation card
-            }
+        if (destPile.type === 'foundation') {
+            if (movingStack.length > 1) return false; // Can't move multiple cards to a foundation
+            if (destPile.arr.length === 0) return movingCard.rank === 'A'; // Only Aces can go on empty foundation
+            const topCard = destPile.arr[destPile.arr.length - 1];
+            return topCard.suit === movingCard.suit && topCard.value === movingCard.value - 1; //Must be same suit and one rank lower.
         }
 
-        if (destEl.classList.contains('column')) {
-            if (destEl.children.length === 0) {
+        if (destPile.type === 'column') {
+            if (destPile.arr.length === 0) {
                 const freeCellsAvailable = this.freeCells.filter(c => c.length === 0).length;
                 const emptyColumnsAvailable = this.tableau.filter(col => col.length === 0).length - 1; // Exclude the destination column since it can't be used.
-                if (this.draggedStack.length > (2 ** emptyColumnsAvailable) * (freeCellsAvailable + 1)) {
-                    return false;
-                }
-                return true; // Can place any card on empty column
-            } else {
-                const topCard = destPile.arr[destPile.arr.length - 1];
-                return topCard.color !== movingCard.color && topCard.value === movingCard.value + 1; // Must be opposite color and one rank higher
+                return movingStack.length <= (2 ** emptyColumnsAvailable) * (freeCellsAvailable + 1);
             }
+            const topCard = destPile.arr[destPile.arr.length - 1];
+            return topCard.color !== movingCard.color && topCard.value === movingCard.value + 1; // Must be opposite color and one rank higher
         }
 
         return false;
@@ -513,8 +494,6 @@ class FreecellGame {
             if (!pile || pile.arr.length === 0) continue;
 
             const movingCard = pile.arr[pile.arr.length - 1];
-            this.draggedCard = movingCard;
-            this.draggedStack = [movingCard];
 
             const movingValue = movingCard.value;
             const movingColor = movingCard.color;
@@ -522,11 +501,9 @@ class FreecellGame {
             if (movingValue === 1 || movingValue === 2) { // Ace or 2 can always move to foundation without additional check.
                 for (let j = 0; j < 4; j++) {
                     const foundationEl = document.getElementById(`found${j + 1}`);
-                    if (this.isValidMove(containerEl, foundationEl)) {
+                    if (this.isValidMove(movingCard, [movingCard], this.getPileForElement(foundationEl))) {
                         this.moveCard(containerEl, foundationEl, movingCard.id);
                         this.render();
-                        this.draggedCard = null;
-                        this.draggedStack = [];
                         return;
                     }
                 }
@@ -534,7 +511,7 @@ class FreecellGame {
                 let foundationTargetEl = null;
                 for (let j = 0; j < 4; j++) {
                     const foundationEl = document.getElementById(`found${j + 1}`);
-                    if (this.isValidMove(containerEl, foundationEl)) {
+                    if (this.isValidMove(movingCard, [movingCard], this.getPileForElement(foundationEl))) {
                         foundationTargetEl = foundationEl;
                         break;
                     }
@@ -572,15 +549,10 @@ class FreecellGame {
                 if (readyToMove === 2) {
                     this.moveCard(containerEl, foundationTargetEl, movingCard.id);
                     this.render();
-                    this.draggedCard = null;
-                    this.draggedStack = [];
                     return;
                 }
             }
         }
-
-        this.draggedCard = null;
-        this.draggedStack = [];
     }
 
     checkWin() {
