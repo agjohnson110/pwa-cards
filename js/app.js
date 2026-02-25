@@ -63,7 +63,8 @@ class FreecellGame {
         this.touchStartY = 0;
         this.dragNotTap = false;
         this.tapThreshold = 8; // px movement allowed before it's considered a drag
-        this.history = []; // for undo later
+        this.history = []; // for undo functionality, stores previous game states or moves
+        this.cardMap = {}; // Map of cardId → Card for quick lookup
 
         this.init();
         this.addEventListeners();  // only once, not on every init reset
@@ -83,7 +84,9 @@ class FreecellGame {
         const ranks = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
         for (let suit of suits) {
             for (let rank of ranks) {
-                this.deck.push(new Card(suit, rank));
+                const card = new Card(suit, rank);
+                this.deck.push(card);
+                this.cardMap[card.id] = card; 
             }
         }
     }
@@ -163,7 +166,7 @@ class FreecellGame {
 
             switch (action) {
                 case 'undo':
-                    //undoLastMove();
+                    this.undoLastMove();
                     break;
 
                 case 'settings':
@@ -421,7 +424,7 @@ class FreecellGame {
         if (!destPile) return;
 
         if (this.isValidMove(this.draggedCard, this.draggedStack, destPile)) {
-            //FUTURE this.saveHistory();
+            this.saveHistory(); // Save state before move for undo functionality
             this.moveCard(sourceEl, destEl, this.draggedCard.id);
             this.render();
             if (this.checkWin()) alert('You win!');
@@ -558,6 +561,60 @@ class FreecellGame {
         }
     }
 
+    saveHistory() {
+        this.history.push({
+            freeCells:   this.freeCells.map(cell => [...cell]),
+            foundations: this.foundations.map(found => [...found]),
+            tableau:     this.tableau.map(col => [...col]),
+            movedIds:    this.draggedStack.map(card => card.id)   // for animation
+        });
+
+        if (this.history.length > 5000) this.history.shift(); // cap memory. 5000 ~5MB.
+    }
+
+    undoLastMove() {
+        if (this.draggedCard) return; // don't undo mid-drag
+        if (this.history.length === 0) return;
+
+        const entry = this.history.pop();
+
+        // FIRST: record current screen positions of cards about to move
+        const cardEls   = entry.movedIds.map(id => this.cardMap[id].element);
+        const firstRects = cardEls.map(el => el.getBoundingClientRect());
+
+        // Restore model state
+        this.freeCells   = entry.freeCells;
+        this.foundations = entry.foundations;
+        this.tableau     = entry.tableau;
+
+        // Re-render so DOM matches restored model (cards snap to correct positions)
+        this.render();
+
+        // LAST: record where they ended up after render
+        const lastRects = cardEls.map(el => el.getBoundingClientRect());
+
+        // INVERT: offset each card back to where it visually was before render
+        cardEls.forEach((el, i) => {
+            const dx = firstRects[i].left - lastRects[i].left;
+            const dy = firstRects[i].top  - lastRects[i].top;
+            el.style.transition = 'none';
+            el.style.transform  = `translate(${dx}px, ${dy}px)`;
+        });
+
+        // PLAY: on next paint, animate back to natural (restored) position
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {           // double rAF: ensures invert was painted first
+                cardEls.forEach(el => {
+                    el.style.transition = 'transform 0.25s ease';
+                    el.style.transform  = '';
+                    el.addEventListener('transitionend', () => {
+                        el.style.transition = ''; // clean up inline style when done
+                    }, { once: true });
+                });
+            });
+        });
+    }
+
     checkWin() {
         return this.foundations.every(f => f.length === 13);
     }
@@ -590,6 +647,7 @@ class FreecellGame {
         this.draggedCard = null;
         this.draggedStack = [];
         this.history = [];
+        this.cardMap = {};
         this.init();
     }
 

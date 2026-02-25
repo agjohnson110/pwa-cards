@@ -15,17 +15,14 @@ A Progressive Web App for installable, offline Freecell solitaire, optimized for
 - On Android: Use "Add to Home Screen" from browser menu
 
 ### TODO
-- options button
-  - move version to options eventually
 
 ### visuals TODO
-- less space between columns
-  - bigger cards
 
 ### controls todo
 - options
   - newgame 
   - restart
+  - version
 - undo button - unlimited undos to start.
   - pause autoupdate during undo
   - undo replaces new game button when not in win or fresh state, so don't accidentally push it
@@ -43,6 +40,6 @@ A Progressive Web App for installable, offline Freecell solitaire, optimized for
 - squish cards when column to long
 - stats - games won/lost, streak. Time? score?
 
-### other games
+## other games
 - spider, with ghost cards after undo
-- sudoku, with single cell super pencil, number selector with . incicator for remaining, and full color
+- sudoku, with single cell super pencil, number selector with . indicator for remaining, and full color
