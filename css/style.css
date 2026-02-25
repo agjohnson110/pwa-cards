@@ -281,3 +281,7 @@ body {
     /* opacity: 0.5; */
     z-index: 1000;
 }
+
+.card.animating {
+    z-index: 1000;
+}
