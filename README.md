@@ -14,17 +14,6 @@ A Progressive Web App for installable, offline Freecell solitaire, optimized for
 - On iOS: Open in Safari, tap share, "Add to Home Screen"
 - On Android: Use "Add to Home Screen" from browser menu
 
-### TODO
-
-### visuals TODO
-
-### controls todo
-- options
-  - newgame 
-  - restart
-  - version
-
-
 ### fancy features TODO
 - shading on groups in columns - subtle
   - different shading based on how many i can currently move

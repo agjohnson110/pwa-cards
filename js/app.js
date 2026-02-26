@@ -77,7 +77,6 @@ class FreecellGame {
         this.gameStartTime = null;
         this.moveCount = 0;
         this.gameActive = false;
-        this.currentSeed = null; // for replay
 
         this.init();
         this.addEventListeners();
@@ -398,9 +397,9 @@ class FreecellGame {
                             <span class="action-icon">🂠</span>
                             <span>New Game</span>
                         </button>
-                        <button class="settings-action-btn" id="btn-replay">
+                        <button class="settings-action-btn" id="btn-restart">
                             <span class="action-icon">↺</span>
-                            <span>Replay</span>
+                            <span>Restart Game</span>
                         </button>
                         <button class="settings-action-btn" id="btn-stats">
                             <span class="action-icon">📊</span>
@@ -501,10 +500,10 @@ class FreecellGame {
             this.resetGame();
         });
 
-        document.getElementById('btn-replay').addEventListener('click', () => {
+        document.getElementById('btn-restart').addEventListener('click', () => {
             this.closeSettings();
             this.recordGameAbandoned();
-            this.replayGame();
+            this.restartGame();
         });
 
         document.getElementById('btn-stats').addEventListener('click', () => {
@@ -1030,10 +1029,22 @@ class FreecellGame {
         return this.foundations.every(f => f.length === 13);
     }
 
-    replayGame() {
-        // Reset state but re-deal the same shuffle by restoring the original tableau
-        // For now: full reset. Seeded replay can be added later.
-        this.resetGame();
+    restartGame() {
+        if (this.history.length === 0) return; // nothing to restart, game is at start
+
+        // The oldest history entry contains the state at the very beginning of the game
+        const initial = this.history[0];
+
+        this.freeCells   = initial.freeCells.map(cell => [...cell]);
+        this.foundations = initial.foundations.map(f    => [...f]);
+        this.tableau     = initial.tableau.map(col      => [...col]);
+
+        this.history  = [];
+        this.moveCount = 0;
+        this.gameStartTime = Date.now(); // reset the timer for the restarted game
+
+        this.renderDOM();
+        this.runAutoMoves();
     }
 
     clearCacheAndReset() {
