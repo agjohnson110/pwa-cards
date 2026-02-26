@@ -261,6 +261,39 @@ class FreecellGame {
                 case 'settings': this.clearCacheAndReset(); break;
             }
         });
+
+        // number bar highlighting:
+
+        const numBar = document.querySelector('.number-bar');
+
+        numBar.addEventListener('touchstart', (e) => {
+            const num = e.target.closest('.num');
+            if (!num) return;
+            e.preventDefault(); // prevent the touch from also firing a click
+            this.highlightCards(num.dataset.value);
+        }, { passive: false });
+
+        numBar.addEventListener('touchend', (e) => {
+            this.clearHighlight();
+        });
+
+        numBar.addEventListener('pointerdown', (e) => {
+            if (e.pointerType === 'touch') return;
+            const num = e.target.closest('.num');
+            if (!num) return;
+            this.highlightCards(num.dataset.value);
+        });
+
+        numBar.addEventListener('pointerup', (e) => {
+            if (e.pointerType === 'touch') return;
+            this.clearHighlight();
+        });
+
+        // Safety net: if the pointer leaves the number bar entirely, clear the highlight
+        numBar.addEventListener('pointerleave', (e) => {
+            if (e.pointerType === 'touch') return;
+            this.clearHighlight();
+        });
     }
 
     // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -694,6 +727,61 @@ class FreecellGame {
                 .then(() => console.log('SW registered'))
                 .catch(() => console.log('SW registration failed'));
         }
+    }
+
+    highlightCardsOLD(value) {
+        document.querySelectorAll('.card').forEach(el => {
+            const card = this.getCardFromElement(el);
+            if (!card) return;
+
+            const matches = value === card.rank
+                        || value === card.suit;
+
+            el.classList.toggle('highlighted', matches);
+            el.classList.toggle('dimmed',      !matches);
+        });
+    }
+
+    highlightCards(value) {
+        // Build a set of card IDs to highlight before touching the DOM
+        const toHighlight = new Set();
+
+        if (value === 'hearts' || value === 'diamonds' || value === 'clubs' || value === 'spades') {
+            // Find how many of this suit are already in the foundation
+            const foundationPile = this.foundations.find(f => f.length > 0 && f[0].suit === value);
+            const foundationCount = foundationPile ? foundationPile.length : 0;
+
+            // The next 3 ranks above what's already in the foundation
+            const nextValues = [foundationCount + 1, foundationCount + 2, foundationCount + 3]
+                .filter(v => v <= 13); // don't go above King
+
+            // Find the actual card objects matching those ranks and suit
+            nextValues.forEach(v => {
+                const card = Object.values(this.cardMap).find(c => c.suit === value && c.value === v);
+                if (card) toHighlight.add(card.id);
+            });
+        }
+
+        document.querySelectorAll('.card').forEach(el => {
+            const card = this.getCardFromElement(el);
+            if (!card) return;
+
+            let matches;
+            if (value === 'hearts' || value === 'diamonds' || value === 'clubs' || value === 'spades') {
+                matches = toHighlight.has(card.id);
+            } else {
+                matches = card.rank === value; // rank highlight unchanged
+            }
+
+            el.classList.toggle('highlighted', matches);
+            el.classList.toggle('dimmed',      !matches);
+        });
+    }
+
+    clearHighlight() {
+        document.querySelectorAll('.card').forEach(el => {
+            el.classList.remove('highlighted', 'dimmed');
+        });
     }
 }
 

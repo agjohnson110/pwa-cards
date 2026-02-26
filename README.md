@@ -23,20 +23,16 @@ A Progressive Web App for installable, offline Freecell solitaire, optimized for
   - newgame 
   - restart
   - version
-- undo button - unlimited undos to start.
-  - pause autoupdate during undo
-  - undo replaces new game button when not in win or fresh state, so don't accidentally push it
+
 
 ### fancy features TODO
 - shading on groups in columns - subtle
   - different shading based on how many i can currently move
-- number selector to highlight where cards are
-  - and suits - but only next 3 for foundations
 - dark mode - black background, dark gray cards, red and light gray suits, light gray buttons
 - allow pull from foundations
 - when to pwa refresh to new version - new game. Allow new games offline
 - face image for face cards JQK
-- movement and win animations and deal?
+- win animations and deal?
 - squish cards when column to long
 - stats - games won/lost, streak. Time? score?
 
