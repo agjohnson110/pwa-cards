@@ -1,5 +1,7 @@
 // Freecell Game Logic
 
+const VERSION = '0.1.0';
+
 class Card {
     constructor(suit, rank) {
         this.suit = suit;
@@ -45,30 +47,136 @@ class Card {
 
         // Link DOM → model
         el.cardRef = this;
-
         return el;
     }
 }
 
 class FreecellGame {
     constructor() {
-        this.deck = [];
-        this.freeCells = [[], [], [], []];      // arrays of Card
-        this.foundations = [[], [], [], []];    // arrays of Card
+        this.deck = []; // id → Card, permanent lookup for all 52 cards
+        this.cardMap = {};
+        this.freeCells = [[], [], [], []]; // arrays of Card
+        this.foundations = [[], [], [], []]; // arrays of Card
         this.tableau = [[], [], [], [], [], [], [], []]; // arrays of Card
 
-        this.draggedCard = null;   // Card
-        this.draggedStack = [];    // Card[]
+        this.draggedCard = null; // Card
+        this.draggedStack = [];  // Card[]
         this.touchStartX = 0;
         this.touchStartY = 0;
         this.dragNotTap = false;
         this.tapThreshold = 8; // px movement allowed before it's considered a drag
         this.history = []; // for undo
-        this.cardMap = {}; // id → Card, permanent lookup for all 52 cards
+
+        // Settings — loaded from localStorage, with defaults
+        this.settings = this.loadSettings();
+
+        // Statistics — loaded from localStorage
+        this.stats = this.loadStats();
+
+        // Game session tracking
+        this.gameStartTime = null;
+        this.moveCount = 0;
+        this.gameActive = false;
+        this.currentSeed = null; // for replay
 
         this.init();
-        this.addEventListeners();  // only once, not inside init so it doesn't re-register on reset
+        this.addEventListeners();
+        this.applySettings();
     }
+
+    // ─── Settings Persistence ─────────────────────────────────────────────────────
+
+    defaultSettings() {
+        return {
+            showScore:      true,
+            showMoves:      true,
+            showTime:       true,
+            autoMove:       true,
+            showNumberBar:  true,
+            darkMode:       false,
+        };
+    }
+
+    loadSettings() {
+        try {
+            const saved = localStorage.getItem('freecell-settings');
+            return saved ? { ...this.defaultSettings(), ...JSON.parse(saved) } : this.defaultSettings();
+        } catch {
+            return this.defaultSettings();
+        }
+    }
+
+    saveSettings() {
+        try {
+            localStorage.setItem('freecell-settings', JSON.stringify(this.settings));
+        } catch {}
+    }
+
+    // Apply all settings to the DOM (called on load and whenever a setting changes)
+    applySettings() {
+        document.body.classList.toggle('dark-mode',       this.settings.darkMode);
+        document.body.classList.toggle('hide-number-bar', !this.settings.showNumberBar);
+        // Score/moves/time visibility handled when those elements are implemented
+    }
+
+    // ─── Statistics Persistence ───────────────────────────────────────────────────
+
+    defaultStats() {
+        return {
+            gamesPlayed:  0,
+            gamesWon:     0,
+            bestMoves:    null,  // null = no win yet
+            bestTime:     null,  // seconds
+            currentStreak: 0,
+            bestStreak:   0,
+        };
+    }
+
+    loadStats() {
+        try {
+            const saved = localStorage.getItem('freecell-stats');
+            return saved ? { ...this.defaultStats(), ...JSON.parse(saved) } : this.defaultStats();
+        } catch {
+            return this.defaultStats();
+        }
+    }
+
+    saveStats() {
+        try {
+            localStorage.setItem('freecell-stats', JSON.stringify(this.stats));
+        } catch {}
+    }
+
+    recordGameStart() {
+        this.gameStartTime = Date.now();
+        this.moveCount     = 0;
+        this.gameActive    = true;
+        this.stats.gamesPlayed++;
+        this.saveStats();
+    }
+
+    recordGameWin() {
+        if (!this.gameActive) return;
+        this.gameActive = false;
+
+        const timeSecs = Math.floor((Date.now() - this.gameStartTime) / 1000);
+
+        this.stats.gamesWon++;
+        this.stats.currentStreak++;
+        this.stats.bestStreak  = Math.max(this.stats.bestStreak, this.stats.currentStreak);
+        this.stats.bestMoves   = this.stats.bestMoves === null ? this.moveCount  : Math.min(this.stats.bestMoves,  this.moveCount);
+        this.stats.bestTime    = this.stats.bestTime  === null ? timeSecs        : Math.min(this.stats.bestTime,   timeSecs);
+        this.saveStats();
+    }
+
+    recordGameAbandoned() {
+        if (!this.gameActive) return;
+        this.gameActive = false;
+        this.stats.currentStreak = 0;
+        this.saveStats();
+    }
+
+    // ─── Init ─────────────────────────────────────────────────────────────────────
 
     init() {
         this.createDeck();
@@ -77,6 +185,7 @@ class FreecellGame {
         this.renderDOM();    // initial render without auto-move
         this.runAutoMoves(); // then run auto-moves (no animations on deal)
         this.registerServiceWorker();
+        this.recordGameStart();
     }
 
     // Push new Card instances into this.deck for all 52 standard cards.
@@ -106,8 +215,7 @@ class FreecellGame {
         for (let col = 0; col < 8; col++) {
             const numCards = col < 4 ? 7 : 6;
             for (let i = 0; i < numCards; i++) {
-                const card = this.deck.pop();
-                this.tableau[col].push(card);
+                this.tableau[col].push(this.deck.pop());
             }
         }
         this.deck = []; // clear remaining references
@@ -122,29 +230,22 @@ class FreecellGame {
         for (let i = 0; i < 4; i++) {
             const cell = document.getElementById(`free${i + 1}`);
             cell.innerHTML = '';
-            if (this.freeCells[i].length > 0) {
-                cell.appendChild(this.freeCells[i][0].element);
-            }
+            if (this.freeCells[i].length > 0) cell.appendChild(this.freeCells[i][0].element);
         }
-
-        // Foundations — show only the top card
         for (let i = 0; i < 4; i++) {
             const found = document.getElementById(`found${i + 1}`);
             found.innerHTML = '';
             if (this.foundations[i].length > 0) {
-                const top = this.foundations[i][this.foundations[i].length - 1];
-                found.appendChild(top.element);
+                found.appendChild(this.foundations[i][this.foundations[i].length - 1].element);
             }
         }
-
-        // Tableau
         for (let i = 0; i < 8; i++) {
             const col = document.getElementById(`col${i + 1}`);
             col.innerHTML = '';
-            for (let card of this.tableau[i]) {
-                col.appendChild(card.element);
-            }
+            for (let card of this.tableau[i]) col.appendChild(card.element);
         }
+
+        //TODO this.adjustColumnSpacing();
     }
 
     // Full render: syncs DOM then runs animated auto-moves.
@@ -152,6 +253,42 @@ class FreecellGame {
     render() {
         this.renderDOM();
         this.runAutoMoves();
+    }
+
+    // ─── Column Compression ───────────────────────────────────────────────────────
+
+    adjustColumnSpacing() {
+        const tableauEl     = document.getElementById('tableau');
+        const tableauHeight = tableauEl.getBoundingClientRect().height;
+
+        for (let i = 0; i < 8; i++) {
+            const colEl = document.getElementById(`col${i + 1}`);
+            const cards = colEl.querySelectorAll('.card');
+
+            if (cards.length <= 1) {
+                colEl.style.removeProperty('--card-offset');
+                continue;
+            }
+
+            colEl.style.removeProperty('--card-offset');
+
+            const firstCard   = cards[0];
+            const lastCard    = cards[cards.length - 1];
+            const cardHeight  = firstCard.getBoundingClientRect().height;
+            const colTop      = colEl.getBoundingClientRect().top;
+            const stackBottom = lastCard.getBoundingClientRect().bottom;
+
+            if (stackBottom <= colTop + tableauHeight) continue; // fits fine
+
+            const availableHeight = tableauHeight - cardHeight;
+            const numOverlapping  = cards.length - 1;
+            const offsetPx        = -(availableHeight / numOverlapping - cardHeight);
+            const cardWidth       = firstCard.getBoundingClientRect().width;
+            const offsetPercent   = (offsetPx / cardWidth) * 100;
+            const clamped         = Math.max(-95, Math.min(-10, offsetPercent));
+
+            colEl.style.setProperty('--card-offset', `${clamped.toFixed(1)}%`);
+        }
     }
 
     // ─── Animation ───────────────────────────────────────────────────────────────
@@ -205,8 +342,7 @@ class FreecellGame {
     }
 
     undo() {
-        if (this.draggedCard)          return; // don't undo mid-drag
-        if (this.history.length === 0) return;
+        if (this.draggedCard || this.history.length === 0) return;
 
         const entry = this.history.pop();
 
@@ -238,6 +374,186 @@ class FreecellGame {
         this.animateCards(cardEls, fromRects);
     }
 
+    // ─── Settings Popup ───────────────────────────────────────────────────────────
+
+    openSettings() {
+        // Remove any existing popup first
+        this.closeSettings();
+
+        const overlay = document.createElement('div');
+        overlay.className = 'settings-overlay';
+        overlay.id = 'settings-overlay';
+
+        overlay.innerHTML = `
+            <div class="settings-popup" id="settings-popup">
+
+                <div class="settings-screen active" id="settings-main">
+                    <div class="settings-header">
+                        <span class="settings-title">Menu</span>
+                        <button class="settings-close" id="settings-close">✕</button>
+                    </div>
+
+                    <div class="settings-actions">
+                        <button class="settings-action-btn" id="btn-new-game">
+                            <span class="action-icon">🂠</span>
+                            <span>New Game</span>
+                        </button>
+                        <button class="settings-action-btn" id="btn-replay">
+                            <span class="action-icon">↺</span>
+                            <span>Replay</span>
+                        </button>
+                        <button class="settings-action-btn" id="btn-stats">
+                            <span class="action-icon">📊</span>
+                            <span>Statistics</span>
+                            <span class="action-chevron">›</span>
+                        </button>
+                    </div>
+
+                    <div class="settings-divider"></div>
+
+                    <div class="settings-toggles">
+                        <label class="settings-toggle-row">
+                            <span class="toggle-label">Show Score</span>
+                            <div class="toggle-switch ${this.settings.showScore ? 'on' : ''}" data-setting="showScore"></div>
+                        </label>
+                        <label class="settings-toggle-row">
+                            <span class="toggle-label">Show Moves</span>
+                            <div class="toggle-switch ${this.settings.showMoves ? 'on' : ''}" data-setting="showMoves"></div>
+                        </label>
+                        <label class="settings-toggle-row">
+                            <span class="toggle-label">Show Timer</span>
+                            <div class="toggle-switch ${this.settings.showTime ? 'on' : ''}" data-setting="showTime"></div>
+                        </label>
+                        <label class="settings-toggle-row">
+                            <span class="toggle-label">Auto-move to Foundation</span>
+                            <div class="toggle-switch ${this.settings.autoMove ? 'on' : ''}" data-setting="autoMove"></div>
+                        </label>
+                        <label class="settings-toggle-row">
+                            <span class="toggle-label">Show Number Bar</span>
+                            <div class="toggle-switch ${this.settings.showNumberBar ? 'on' : ''}" data-setting="showNumberBar"></div>
+                        </label>
+                        <label class="settings-toggle-row">
+                            <span class="toggle-label">Dark Mode</span>
+                            <div class="toggle-switch ${this.settings.darkMode ? 'on' : ''}" data-setting="darkMode"></div>
+                        </label>
+                    </div>
+
+                    <div class="settings-version">v${VERSION}</div>
+                </div>
+
+                <div class="settings-screen" id="settings-stats">
+                    <div class="settings-header">
+                        <button class="settings-back" id="stats-back">‹</button>
+                        <span class="settings-title">Statistics</span>
+                        <div style="width:2em"></div>
+                    </div>
+
+                    <div class="stats-grid">
+                        <div class="stat-cell">
+                            <div class="stat-value">${this.stats.gamesPlayed}</div>
+                            <div class="stat-label">Played</div>
+                        </div>
+                        <div class="stat-cell">
+                            <div class="stat-value">${this.stats.gamesPlayed > 0 ? Math.round((this.stats.gamesWon / this.stats.gamesPlayed) * 100) : 0}%</div>
+                            <div class="stat-label">Win Rate</div>
+                        </div>
+                        <div class="stat-cell">
+                            <div class="stat-value">${this.stats.currentStreak}</div>
+                            <div class="stat-label">Current Streak</div>
+                        </div>
+                        <div class="stat-cell">
+                            <div class="stat-value">${this.stats.bestStreak}</div>
+                            <div class="stat-label">Best Streak</div>
+                        </div>
+                        <div class="stat-cell">
+                            <div class="stat-value">${this.stats.bestMoves ?? '—'}</div>
+                            <div class="stat-label">Best Moves</div>
+                        </div>
+                        <div class="stat-cell">
+                            <div class="stat-value">${this.stats.bestTime ? this.formatTime(this.stats.bestTime) : '—'}</div>
+                            <div class="stat-label">Best Time</div>
+                        </div>
+                    </div>
+
+                    <div class="settings-divider"></div>
+
+                    <button class="settings-danger-btn" id="btn-reset-stats">Reset Statistics</button>
+                </div>
+
+            </div>
+        `;
+
+        document.body.appendChild(overlay);
+
+        // Animate in
+        requestAnimationFrame(() => overlay.classList.add('visible'));
+
+        // Wire up events inside the popup
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) this.closeSettings(); // click backdrop to close
+        });
+
+        document.getElementById('settings-close').addEventListener('click', () => this.closeSettings());
+
+        document.getElementById('btn-new-game').addEventListener('click', () => {
+            this.closeSettings();
+            this.recordGameAbandoned();
+            this.resetGame();
+        });
+
+        document.getElementById('btn-replay').addEventListener('click', () => {
+            this.closeSettings();
+            this.recordGameAbandoned();
+            this.replayGame();
+        });
+
+        document.getElementById('btn-stats').addEventListener('click', () => {
+            this.showSettingsScreen('settings-stats');
+        });
+
+        document.getElementById('stats-back').addEventListener('click', () => {
+            this.showSettingsScreen('settings-main');
+        });
+
+        document.getElementById('btn-reset-stats').addEventListener('click', () => {
+            if (confirm('Reset all statistics?')) {
+                this.stats = this.defaultStats();
+                this.saveStats();
+                this.closeSettings();
+                this.openSettings(); // reopen to refresh displayed values
+            }
+        });
+
+        // Toggle switches
+        overlay.querySelectorAll('.toggle-switch').forEach(toggle => {
+            toggle.addEventListener('click', () => {
+                const setting = toggle.dataset.setting;
+                this.settings[setting] = !this.settings[setting];
+                toggle.classList.toggle('on', this.settings[setting]);
+                this.saveSettings();
+                this.applySettings();
+            });
+        });
+    }
+
+    showSettingsScreen(screenId) {
+        document.querySelectorAll('.settings-screen').forEach(s => s.classList.remove('active'));
+        document.getElementById(screenId).classList.add('active');
+    }
+
+    closeSettings() {
+        const overlay = document.getElementById('settings-overlay');
+        if (!overlay) return;
+        overlay.classList.remove('visible');
+        overlay.addEventListener('transitionend', () => overlay.remove(), { once: true });
+    }
+
+    formatTime(seconds) {
+        const m = Math.floor(seconds / 60);
+        const s = seconds % 60;
+        return `${m}:${s.toString().padStart(2, '0')}`;
+    }
+
     // ─── Event Listeners ─────────────────────────────────────────────────────────
 
     addEventListeners() {
@@ -255,15 +571,13 @@ class FreecellGame {
         document.addEventListener('click', (e) => {
             const button = e.target.closest('.top-button');
             if (!button) return;
-
             switch (button.dataset.action) {
-                case 'undo':     this.undo();            break;
-                case 'settings': this.clearCacheAndReset(); break;
+                case 'undo':     this.undo();         break;
+                case 'settings': this.openSettings(); break;
             }
         });
 
-        // number bar highlighting:
-
+        // Number bar highlight
         const numBar = document.querySelector('.number-bar');
 
         numBar.addEventListener('touchstart', (e) => {
@@ -273,9 +587,7 @@ class FreecellGame {
             this.highlightCards(num.dataset.value);
         }, { passive: false });
 
-        numBar.addEventListener('touchend', (e) => {
-            this.clearHighlight();
-        });
+        numBar.addEventListener('touchend', () => this.clearHighlight());
 
         numBar.addEventListener('pointerdown', (e) => {
             if (e.pointerType === 'touch') return;
@@ -284,16 +596,44 @@ class FreecellGame {
             this.highlightCards(num.dataset.value);
         });
 
-        numBar.addEventListener('pointerup', (e) => {
-            if (e.pointerType === 'touch') return;
-            this.clearHighlight();
-        });
-
+        numBar.addEventListener('pointerup',    (e) => { if (e.pointerType !== 'touch') this.clearHighlight(); });
+        
         // Safety net: if the pointer leaves the number bar entirely, clear the highlight
-        numBar.addEventListener('pointerleave', (e) => {
-            if (e.pointerType === 'touch') return;
-            this.clearHighlight();
+        numBar.addEventListener('pointerleave', (e) => { if (e.pointerType !== 'touch') this.clearHighlight(); });
+    }
+
+    // ─── Card Highlight ───────────────────────────────────────────────────────────
+
+    highlightCards(value) {
+        // Build a set of card IDs to highlight before touching the DOM
+        const toHighlight = new Set();
+
+        if (['hearts', 'diamonds', 'clubs', 'spades'].includes(value)) {
+            // Find how many of this suit are already in the foundation
+            const foundationPile  = this.foundations.find(f => f.length > 0 && f[0].suit === value);
+            const foundationCount = foundationPile ? foundationPile.length : 0;
+
+            // The next 3 ranks above what's already in the foundation, with a max of King (13)
+            const nextValues      = [foundationCount + 1, foundationCount + 2, foundationCount + 3].filter(v => v <= 13);
+            nextValues.forEach(v => {
+                const card = Object.values(this.cardMap).find(c => c.suit === value && c.value === v);
+                if (card) toHighlight.add(card.id);
+            });
+        }
+
+        document.querySelectorAll('.card').forEach(el => {
+            const card = this.getCardFromElement(el);
+            if (!card) return;
+            const matches = ['hearts', 'diamonds', 'clubs', 'spades'].includes(value)
+                ? toHighlight.has(card.id)
+                : card.rank === value;
+            el.classList.toggle('highlighted', matches);
+            el.classList.toggle('dimmed',      !matches);
         });
+    }
+
+    clearHighlight() {
+        document.querySelectorAll('.card').forEach(el => el.classList.remove('highlighted', 'dimmed'));
     }
 
     // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -307,12 +647,9 @@ class FreecellGame {
     // Kept separate from CSS classes since classes are for styling and may change.
     getPileForElement(containerEl) {
         if (!containerEl) return null;
-
         const type  = containerEl.dataset.pileType; // dataset.pileType comes from data-pile-type in html. Separate from class since class is used for styling and may have multiple values, while data-pile-type is strictly for identifying the type of pile.
         const index = parseInt(containerEl.dataset.pileIndex, 10);
-
         if (isNaN(index) || !type) return null; // element isn't a pile container
-
         switch (type) {
             case 'cell':       return { type, index, arr: this.freeCells[index] }; //property name can automatch variable name (type: type)
             case 'foundation': return { type, index, arr: this.foundations[index] };
@@ -324,7 +661,7 @@ class FreecellGame {
     // ─── Touch Handlers ──────────────────────────────────────────────────────────
 
     handleTouchStart(e) {
-        const touch = e.touches[0];
+        const touch    = e.touches[0];
         this.touchStartX = touch.clientX;
         this.touchStartY = touch.clientY;
         this.dragNotTap  = false;
@@ -382,8 +719,7 @@ class FreecellGame {
             const targetEl = document.elementFromPoint(touch.clientX, touch.clientY);
             this.attemptMove(targetEl, true);  // drag — no tap animation
         } else {
-            const targetEl = this.findBestTarget();
-            this.attemptMove(targetEl, false); // tap — animate the move
+            this.attemptMove(this.findBestTarget(), false); // tap — animate the move
         }
 
         this.draggedCard  = null;
@@ -422,7 +758,7 @@ class FreecellGame {
         }
 
         this.draggedStack.forEach(c => c.element.classList.add('dragging'));
-        try { targetEl.setPointerCapture?.(e.pointerId); } catch (err) {}
+        try { targetEl.setPointerCapture?.(e.pointerId); } catch {}
     }
 
     handlePointerMove(e) {
@@ -453,13 +789,12 @@ class FreecellGame {
 
         if (this.dragNotTap) {
             const targetEl = document.elementFromPoint(e.clientX, e.clientY);
-            this.attemptMove(targetEl, true);  // drag — no tap animation
+            this.attemptMove(targetEl, true); // drag — no tap animation
         } else {
-            const targetEl = this.findBestTarget();
-            this.attemptMove(targetEl, false); // tap — animate the move
+            this.attemptMove(this.findBestTarget(), false); // tap — animate the move
         }
 
-        try { this.draggedCard.element.releasePointerCapture?.(e.pointerId); } catch (err) {}
+        try { this.draggedCard.element.releasePointerCapture?.(e.pointerId); } catch {}
         this.draggedCard  = null;
         this.draggedStack = [];
     }
@@ -471,52 +806,45 @@ class FreecellGame {
         for (let i = 0; i < this.draggedStack.length - 1; i++) {
             const curr = this.draggedStack[i];
             const next = this.draggedStack[i + 1];
-            if (next.color === curr.color)       return true; // same color — not a valid sequence
-            if (next.value !== curr.value - 1)   return true; // not descending — not a valid sequence
+            if (next.color === curr.color)     return true; // same color — not a valid sequence
+            if (next.value !== curr.value - 1) return true; // not descending — not a valid sequence
         }
-
-        const freeCellsAvailable  = this.freeCells.filter(c => c.length === 0).length;
+        const freeCellsAvailable    = this.freeCells.filter(c => c.length === 0).length;
         const emptyColumnsAvailable = this.tableau.filter(col => col.length === 0).length;
-        if (this.draggedStack.length > (2 ** emptyColumnsAvailable) * (freeCellsAvailable + 1)) {
-            return true; // not enough room to move this stack
-        }
-        return false;
+        return this.draggedStack.length > (2 ** emptyColumnsAvailable) * (freeCellsAvailable + 1);
     }
 
     // Finds the best destination for a tap move using model-based priority ordering.
     findBestTarget() {
-        const card        = this.draggedCard;
-        const stack       = this.draggedStack;
+        const card         = this.draggedCard;
+        const stack        = this.draggedStack;
         const cardParentEl = card.element.parentElement;
-        const currentPile = this.getPileForElement(cardParentEl);
+        const currentPile  = this.getPileForElement(cardParentEl);
 
         const columnPiles = this.tableau.map((arr, i) => ({
-            type: 'column', index: i, arr,
-            el: document.getElementById(`col${i + 1}`)
+            type: 'column', index: i, arr, el: document.getElementById(`col${i + 1}`)
         }));
         const cellPiles = this.freeCells.map((arr, i) => ({
-            type: 'cell', index: i, arr,
-            el: document.getElementById(`free${i + 1}`)
+            type: 'cell', index: i, arr, el: document.getElementById(`free${i + 1}`)
         }));
         const foundationPiles = this.foundations.map((arr, i) => ({
-            type: 'foundation', index: i, arr,
-            el: document.getElementById(`found${i + 1}`)
+            type: 'foundation', index: i, arr, el: document.getElementById(`found${i + 1}`)
         }));
 
         if (stack.length > 1) {
             // Stacks can only go to columns: non-empty first, empty second
             const hit =
-                columnPiles.find(p => p.el !== cardParentEl && p.arr.length > 0 && this.isValidMove(card, stack, p)) ||
+                columnPiles.find(p => p.el !== cardParentEl && p.arr.length > 0  && this.isValidMove(card, stack, p)) ||
                 columnPiles.find(p => p.el !== cardParentEl && p.arr.length === 0 && this.isValidMove(card, stack, p));
             return hit?.el || cardParentEl;
         }
 
         // Single card: non-empty columns → free cells → empty columns → foundations
         const hit =
-            columnPiles.find(p => p.el !== cardParentEl && p.arr.length > 0  && this.isValidMove(card, stack, p)) ||
-            cellPiles.find(p    => currentPile?.type !== 'cell'               && this.isValidMove(card, stack, p)) ||
-            columnPiles.find(p => p.el !== cardParentEl && p.arr.length === 0 && this.isValidMove(card, stack, p)) ||
-            foundationPiles.find(p =>                                            this.isValidMove(card, stack, p));
+            columnPiles.find(p    => p.el !== cardParentEl && p.arr.length > 0  && this.isValidMove(card, stack, p)) ||
+            cellPiles.find(p      => currentPile?.type !== 'cell'                && this.isValidMove(card, stack, p)) ||
+            columnPiles.find(p    => p.el !== cardParentEl && p.arr.length === 0 && this.isValidMove(card, stack, p)) ||
+            foundationPiles.find(p =>                                               this.isValidMove(card, stack, p));
 
         return hit?.el || cardParentEl;
     }
@@ -537,6 +865,7 @@ class FreecellGame {
 
         if (this.isValidMove(this.draggedCard, this.draggedStack, destPile)) {
             this.saveHistory();
+            this.moveCount++;
 
             // Capture positions BEFORE render for tap animation
             const cardEls   = this.draggedStack.map(c => c.element);
@@ -547,7 +876,10 @@ class FreecellGame {
 
             if (!isDrag) this.animateCards(cardEls, fromRects);
 
-            if (this.checkWin()) alert('You win!');
+            if (this.checkWin()) {
+                this.recordGameWin();
+                alert('You win!');
+            }
         }
     }
 
@@ -602,11 +934,12 @@ class FreecellGame {
         }
     }
 
-    // ─── Auto-move to Foundation ─────────────────────────────────────────────────
+    // ─── Auto-move ───────────────────────────────────────────────────────────────
 
-    // Finds the next single card that should be automatically moved to a foundation.
-    // Returns { card, sourceEl, foundationEl } or null if nothing should move.
     findNextAutoMove() {
+        // Respect the autoMove setting
+        if (!this.settings.autoMove) return null;
+
         const candidates = [
             ...this.tableau.map((arr, i)   => ({ arr, el: document.getElementById(`col${i + 1}`) })),
             ...this.freeCells.map((arr, i) => ({ arr, el: document.getElementById(`free${i + 1}`) }))
@@ -691,13 +1024,17 @@ class FreecellGame {
         }
     }
 
-    // ─── Win Condition ───────────────────────────────────────────────────────────
+    // ─── Win / Reset ─────────────────────────────────────────────────────────────
 
     checkWin() {
         return this.foundations.every(f => f.length === 13);
     }
 
-    // ─── Reset / Service Worker ──────────────────────────────────────────────────
+    replayGame() {
+        // Reset state but re-deal the same shuffle by restoring the original tableau
+        // For now: full reset. Seeded replay can be added later.
+        this.resetGame();
+    }
 
     clearCacheAndReset() {
         if ('caches' in window) {
@@ -710,14 +1047,16 @@ class FreecellGame {
     }
 
     resetGame() {
-        this.deck        = [];
-        this.cardMap     = {}; // cleared so createDeck() populates fresh Card instances
-        this.freeCells   = [[], [], [], []];
-        this.foundations = [[], [], [], []];
-        this.tableau     = [[], [], [], [], [], [], [], []];
+        this.deck         = [];
+        this.cardMap      = {};
+        this.freeCells    = [[], [], [], []];
+        this.foundations  = [[], [], [], []];
+        this.tableau      = [[], [], [], [], [], [], [], []];
         this.draggedCard  = null;
         this.draggedStack = [];
         this.history      = [];
+        this.moveCount    = 0;
+        this.gameActive   = false;
         this.init();
     }
 
@@ -727,61 +1066,6 @@ class FreecellGame {
                 .then(() => console.log('SW registered'))
                 .catch(() => console.log('SW registration failed'));
         }
-    }
-
-    highlightCardsOLD(value) {
-        document.querySelectorAll('.card').forEach(el => {
-            const card = this.getCardFromElement(el);
-            if (!card) return;
-
-            const matches = value === card.rank
-                        || value === card.suit;
-
-            el.classList.toggle('highlighted', matches);
-            el.classList.toggle('dimmed',      !matches);
-        });
-    }
-
-    highlightCards(value) {
-        // Build a set of card IDs to highlight before touching the DOM
-        const toHighlight = new Set();
-
-        if (value === 'hearts' || value === 'diamonds' || value === 'clubs' || value === 'spades') {
-            // Find how many of this suit are already in the foundation
-            const foundationPile = this.foundations.find(f => f.length > 0 && f[0].suit === value);
-            const foundationCount = foundationPile ? foundationPile.length : 0;
-
-            // The next 3 ranks above what's already in the foundation
-            const nextValues = [foundationCount + 1, foundationCount + 2, foundationCount + 3]
-                .filter(v => v <= 13); // don't go above King
-
-            // Find the actual card objects matching those ranks and suit
-            nextValues.forEach(v => {
-                const card = Object.values(this.cardMap).find(c => c.suit === value && c.value === v);
-                if (card) toHighlight.add(card.id);
-            });
-        }
-
-        document.querySelectorAll('.card').forEach(el => {
-            const card = this.getCardFromElement(el);
-            if (!card) return;
-
-            let matches;
-            if (value === 'hearts' || value === 'diamonds' || value === 'clubs' || value === 'spades') {
-                matches = toHighlight.has(card.id);
-            } else {
-                matches = card.rank === value; // rank highlight unchanged
-            }
-
-            el.classList.toggle('highlighted', matches);
-            el.classList.toggle('dimmed',      !matches);
-        });
-    }
-
-    clearHighlight() {
-        document.querySelectorAll('.card').forEach(el => {
-            el.classList.remove('highlighted', 'dimmed');
-        });
     }
 }
 

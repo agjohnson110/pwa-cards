@@ -1,0 +1,377 @@
+/* ─── Settings Overlay ──────────────────────────────────────────────────────── */
+
+.settings-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 2000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.settings-overlay.visible {
+    opacity: 1;
+}
+
+.settings-popup {
+    background: #f5f0e8;
+    border-radius: 16px;
+    width: min(340px, 90vw);
+    max-height: 85vh;
+    overflow: hidden;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.35);
+    position: relative;
+    transform: translateY(10px);
+    transition: transform 0.2s ease;
+}
+
+.settings-overlay.visible .settings-popup {
+    transform: translateY(0);
+}
+
+/* ─── Settings Screens (main / stats) ───────────────────────────────────────── */
+
+.settings-screen {
+    display: none;
+    flex-direction: column;
+    padding: 0 0 16px 0;
+    max-height: 85vh;
+    overflow-y: auto;
+}
+
+.settings-screen.active {
+    display: flex;
+}
+
+/* ─── Header ────────────────────────────────────────────────────────────────── */
+
+.settings-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 16px 12px 16px;
+    border-bottom: 1px solid rgba(0,0,0,0.1);
+    position: sticky;
+    top: 0;
+    background: #f5f0e8;
+    z-index: 1;
+}
+
+.settings-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: #1a1a1a;
+    letter-spacing: 0.01em;
+}
+
+.settings-close,
+.settings-back {
+    background: rgba(0,0,0,0.08);
+    border: none;
+    border-radius: 50%;
+    width: 30px;
+    height: 30px;
+    font-size: 16px;
+    cursor: pointer;
+    color: #333;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    touch-action: manipulation;
+    line-height: 1;
+}
+
+.settings-back {
+    font-size: 22px;
+    font-weight: bold;
+}
+
+/* ─── Action Buttons ────────────────────────────────────────────────────────── */
+
+.settings-actions {
+    display: flex;
+    flex-direction: column;
+    padding: 12px 16px 0;
+    gap: 6px;
+}
+
+.settings-action-btn {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    padding: 13px 14px;
+    background: white;
+    border: 1px solid rgba(0,0,0,0.1);
+    border-radius: 10px;
+    font-size: 15px;
+    font-weight: 600;
+    color: #1a1a1a;
+    cursor: pointer;
+    touch-action: manipulation;
+    text-align: left;
+    transition: background 0.1s;
+}
+
+.settings-action-btn:active {
+    background: #e8e2d8;
+}
+
+.action-icon {
+    font-size: 18px;
+    width: 24px;
+    text-align: center;
+}
+
+.action-chevron {
+    margin-left: auto;
+    font-size: 20px;
+    color: #999;
+    font-weight: 300;
+}
+
+/* ─── Divider ────────────────────────────────────────────────────────────────── */
+
+.settings-divider {
+    height: 1px;
+    background: rgba(0,0,0,0.1);
+    margin: 12px 16px;
+}
+
+/* ─── Toggle Rows ────────────────────────────────────────────────────────────── */
+
+.settings-toggles {
+    display: flex;
+    flex-direction: column;
+    padding: 0 16px;
+    gap: 2px;
+}
+
+.settings-toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 11px 0;
+    border-bottom: 1px solid rgba(0,0,0,0.06);
+    cursor: pointer;
+    touch-action: manipulation;
+}
+
+.settings-toggle-row:last-child {
+    border-bottom: none;
+}
+
+.toggle-label {
+    font-size: 15px;
+    color: #1a1a1a;
+}
+
+/* Toggle switch pill */
+.toggle-switch {
+    width: 44px;
+    height: 26px;
+    border-radius: 13px;
+    background: #ccc;
+    position: relative;
+    transition: background 0.2s;
+    flex-shrink: 0;
+}
+
+.toggle-switch::after {
+    content: '';
+    position: absolute;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: white;
+    top: 2px;
+    left: 2px;
+    transition: transform 0.2s;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+}
+
+.toggle-switch.on {
+    background: #34c759; /* iOS green */
+}
+
+.toggle-switch.on::after {
+    transform: translateX(18px);
+}
+
+/* ─── Version ────────────────────────────────────────────────────────────────── */
+
+.settings-version {
+    text-align: center;
+    font-size: 12px;
+    color: #aaa;
+    padding: 8px 0 4px;
+}
+
+/* ─── Statistics Screen ──────────────────────────────────────────────────────── */
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 12px;
+    padding: 16px;
+}
+
+.stat-cell {
+    background: white;
+    border-radius: 10px;
+    padding: 14px 8px;
+    text-align: center;
+    border: 1px solid rgba(0,0,0,0.08);
+}
+
+.stat-value {
+    font-size: 26px;
+    font-weight: 700;
+    color: #1a1a1a;
+    line-height: 1;
+    margin-bottom: 4px;
+}
+
+.stat-label {
+    font-size: 11px;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.settings-danger-btn {
+    display: block;
+    margin: 4px 16px 0;
+    width: calc(100% - 32px);
+    padding: 12px;
+    background: none;
+    border: 1px solid #ff3b30;
+    border-radius: 10px;
+    color: #ff3b30;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    touch-action: manipulation;
+    transition: background 0.1s;
+}
+
+.settings-danger-btn:active {
+    background: rgba(255, 59, 48, 0.08);
+}
+
+/* ─── Card Animation Z-index ─────────────────────────────────────────────────── */
+
+.card.animating {
+    z-index: 1000;
+}
+
+/* ─── Card Highlight ─────────────────────────────────────────────────────────── */
+
+.card.highlighted {
+    outline: 3px solid gold;
+    box-shadow: 0 0 8px 2px gold;
+    z-index: 10;
+}
+
+.card.dimmed {
+    opacity: 0.35;
+}
+
+/* ─── Hide Number Bar setting ────────────────────────────────────────────────── */
+
+body.hide-number-bar .number-bar {
+    display: none;
+}
+
+/* ─── Dark Mode ──────────────────────────────────────────────────────────────── */
+
+body.dark-mode {
+    background-color: #1a2e1a;
+}
+
+body.dark-mode .column::before {
+    background-color: rgba(255, 255, 255, 0.08);
+}
+
+body.dark-mode .cell,
+body.dark-mode .foundation {
+    background-color: rgba(255, 255, 255, 0.08);
+    border-color: #1a2e1a;
+}
+
+body.dark-mode .foundation::before {
+    color: #2d5a2d;
+}
+
+body.dark-mode .card.red {
+    background-color: #f0e6e6;
+}
+
+body.dark-mode .card.black {
+    background-color: #e8e8e8;
+}
+
+body.dark-mode .num {
+    color: #2d5a2d;
+}
+
+body.dark-mode .top-button {
+    background-color: #2d2d2d;
+}
+
+body.dark-mode .settings-popup {
+    background: #2a2a2a;
+}
+
+body.dark-mode .settings-header {
+    background: #2a2a2a;
+    border-bottom-color: rgba(255,255,255,0.1);
+}
+
+body.dark-mode .settings-title {
+    color: #f0f0f0;
+}
+
+body.dark-mode .settings-close,
+body.dark-mode .settings-back {
+    background: rgba(255,255,255,0.1);
+    color: #f0f0f0;
+}
+
+body.dark-mode .settings-action-btn {
+    background: #3a3a3a;
+    border-color: rgba(255,255,255,0.1);
+    color: #f0f0f0;
+}
+
+body.dark-mode .settings-action-btn:active {
+    background: #444;
+}
+
+body.dark-mode .toggle-label {
+    color: #f0f0f0;
+}
+
+body.dark-mode .settings-toggle-row {
+    border-bottom-color: rgba(255,255,255,0.08);
+}
+
+body.dark-mode .settings-divider {
+    background: rgba(255,255,255,0.1);
+}
+
+body.dark-mode .stat-cell {
+    background: #3a3a3a;
+    border-color: rgba(255,255,255,0.1);
+}
+
+body.dark-mode .stat-value {
+    color: #f0f0f0;
+}
+
+body.dark-mode .settings-version {
+    color: #666;
+}
