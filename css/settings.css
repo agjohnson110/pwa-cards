@@ -262,24 +262,6 @@
     background: rgba(255, 59, 48, 0.08);
 }
 
-/* ─── Card Animation Z-index ─────────────────────────────────────────────────── */
-
-.card.animating {
-    z-index: 1000;
-}
-
-/* ─── Card Highlight ─────────────────────────────────────────────────────────── */
-
-.card.highlighted {
-    outline: 3px solid gold;
-    box-shadow: 0 0 8px 2px gold;
-    z-index: 10;
-}
-
-.card.dimmed {
-    opacity: 0.35;
-}
-
 /* ─── Hide Number Bar setting ────────────────────────────────────────────────── */
 
 body.hide-number-bar .number-bar {
@@ -288,8 +270,8 @@ body.hide-number-bar .number-bar {
 
 /* ─── Dark Mode ──────────────────────────────────────────────────────────────── */
 
-body.dark-mode {
-    background-color: #1a2e1a;
+body.dark-mode, body.dark-mode .top-button {
+    background-color: #1d0707;
 }
 
 body.dark-mode .column::before {
@@ -299,27 +281,27 @@ body.dark-mode .column::before {
 body.dark-mode .cell,
 body.dark-mode .foundation {
     background-color: rgba(255, 255, 255, 0.08);
-    border-color: #1a2e1a;
+    border-color: #0f0f0f;
 }
 
 body.dark-mode .foundation::before {
-    color: #2d5a2d;
+    color: #333333;
 }
 
 body.dark-mode .card.red {
-    background-color: #f0e6e6;
+    background-color: #3f3f3f;
+    border: 1px solid rgba(0, 0, 0, 0.85);
+    color: #d33e3e;
 }
 
 body.dark-mode .card.black {
-    background-color: #e8e8e8;
+    background-color: #3f3f3f;
+    border: 1px solid rgba(0, 0, 0, 0.85);
+    color: #cfcfcf;
 }
 
 body.dark-mode .num {
-    color: #2d5a2d;
-}
-
-body.dark-mode .top-button {
-    background-color: #2d2d2d;
+    color: #cfcfcf;
 }
 
 body.dark-mode .settings-popup {
