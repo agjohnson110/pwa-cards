@@ -154,6 +154,13 @@ class FreecellGame {
         this.gameActive    = true;
         this.stats.gamesPlayed++;
         this.saveStats();
+
+        // Clear any existing timer before starting a new one
+        clearInterval(this.timerInterval);
+        this.timerInterval = setInterval(() => {
+            const elapsed = Math.floor((Date.now() - this.gameStartTime) / 1000);
+            document.getElementById('timer').textContent = `Time: ${this.formatTime(elapsed)}`;
+        }, 1000);
     }
 
     recordGameWin() {
@@ -161,6 +168,7 @@ class FreecellGame {
         this.gameActive = false;
 
         const timeSecs = Math.floor((Date.now() - this.gameStartTime) / 1000);
+        clearInterval(this.timerInterval);
 
         this.stats.gamesWon++;
         this.stats.currentStreak++;
@@ -173,6 +181,7 @@ class FreecellGame {
     recordGameAbandoned() {
         if (!this.gameActive) return;
         this.gameActive = false;
+        clearInterval(this.timerInterval);
         this.stats.currentStreak = 0;
         this.saveStats();
     }
@@ -180,6 +189,9 @@ class FreecellGame {
     // ─── Init ─────────────────────────────────────────────────────────────────────
 
     init() {
+        document.getElementById('win-message').style.display = 'none';
+        document.getElementById('middle-btn-new-game').style.display = 'none';
+        this.updateMovesAndScore();
         this.createDeck();
         this.shuffleDeck();
         this.dealCards();
@@ -580,8 +592,6 @@ class FreecellGame {
 
         document.getElementById('middle-btn-new-game').addEventListener('click', () => {
             this.resetGame();
-            document.getElementById('win-message').style.display = 'none';
-            document.getElementById('middle-btn-new-game').style.display = 'none';
         });
 
         // Number bar highlight
@@ -873,6 +883,7 @@ class FreecellGame {
         if (this.isValidMove(this.draggedCard, this.draggedStack, destPile)) {
             this.saveHistory();
             this.moveCount++;
+            this.updateMovesAndScore();
 
             // Capture positions BEFORE render for tap animation
             const cardEls   = this.draggedStack.map(c => c.element);
@@ -1035,6 +1046,18 @@ class FreecellGame {
 
     // ─── Win / Reset ─────────────────────────────────────────────────────────────
 
+    updateMovesAndScore() {
+        document.getElementById('moves').textContent = `Moves: ${this.moveCount}`;
+        if (this.settings.showScore) {
+            const score = 520 - this.moveCount;
+            // Alternative scoring: 520 - moveCount (10 pts per foundation card - 1 per move)
+            // Alternative scoring: Math.max(0, 500 - this.moveCount * 5 + Math.floor((Date.now() - this.gameStartTime) / 1000));
+            document.getElementById('score').textContent = `Score: ${score}`;
+        }
+    }
+
+    // ─── Win / Reset ─────────────────────────────────────────────────────────────
+
     checkWin() {
         return this.foundations.every(f => f.length === 13);
     }
@@ -1055,6 +1078,7 @@ class FreecellGame {
 
         this.renderDOM();
         this.runAutoMoves();
+        this.updateMovesAndScore();
     }
 
     clearCacheAndReset() {
@@ -1078,6 +1102,7 @@ class FreecellGame {
         this.history      = [];
         this.moveCount    = 0;
         this.gameActive   = false;
+        clearInterval(this.timerInterval);
         this.init();
     }
 
