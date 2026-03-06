@@ -115,7 +115,9 @@ class FreecellGame {
     applySettings() {
         document.body.classList.toggle('dark-mode',       this.settings.darkMode);
         document.body.classList.toggle('hide-number-bar', !this.settings.showNumberBar);
-        // Score/moves/time visibility handled when those elements are implemented
+        document.body.classList.toggle('hide-score',      !this.settings.showScore);
+        document.body.classList.toggle('hide-moves',      !this.settings.showMoves);
+        document.body.classList.toggle('hide-time',       !this.settings.showTime);
     }
 
     // ─── Statistics Persistence ───────────────────────────────────────────────────
@@ -394,11 +396,11 @@ class FreecellGame {
 
                     <div class="settings-actions">
                         <button class="settings-action-btn" id="btn-new-game">
-                            <span class="action-icon">🂠</span>
+                            <span class="action-icon">➕</span>
                             <span>New Game</span>
                         </button>
                         <button class="settings-action-btn" id="btn-restart">
-                            <span class="action-icon">↺</span>
+                            <span class="action-icon">⏮</span>
                             <span>Restart Game</span>
                         </button>
                         <button class="settings-action-btn" id="btn-stats">
@@ -574,6 +576,12 @@ class FreecellGame {
                 case 'undo':     this.undo();         break;
                 case 'settings': this.openSettings(); break;
             }
+        });
+
+        document.getElementById('middle-btn-new-game').addEventListener('click', () => {
+            this.resetGame();
+            document.getElementById('win-message').style.display = 'none';
+            document.getElementById('middle-btn-new-game').style.display = 'none';
         });
 
         // Number bar highlight
@@ -877,7 +885,9 @@ class FreecellGame {
 
             if (this.checkWin()) {
                 this.recordGameWin();
-                alert('You win!');
+                document.getElementById('win-message').style.display = 'block';
+                document.getElementById('middle-btn-new-game').style.display = 'flex'; // flex to keep the icon+text row layout
+                // alert('You win!');
             }
         }
     }
