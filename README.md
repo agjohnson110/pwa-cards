@@ -14,22 +14,22 @@ A Progressive Web App for installable, offline Freecell solitaire, optimized for
 - On iOS: Open in Safari, tap share, "Add to Home Screen"
 - On Android: Use "Add to Home Screen" from browser menu
 
+### Versioning
+- edit both .js files
+
 ### TODO Bugs
 + undo breaks z-position of some tableau cards
 + restarting app required internet connection
 - squish cards when column is to long
 
 ### TODO Features
-- shading on groups in columns - subtle - try borders instead
-  - different shading based on how many i can currently move
+- group shading based on how many i can currently move
 - allow pull from foundations
 - face image for face cards JQK
 - win animations and deal?
-- Licesne statement in code. GNU?
-- better scoring formula using the time
+- License statement in code. GNU?
 - disable undo/restart at game win
 - display some stats at game win (current vs best time/score/moves, totals)
-- adjust UI element sizes for all screens and orientations
 - maybe slow down animations
 
 ### TODO settings page
@@ -38,6 +38,11 @@ A Progressive Web App for installable, offline Freecell solitaire, optimized for
 - rules
 - maybe help icons for some settings
 - maybe debug mode (ignore card placement rules)
+
+### TODO final refinement
+- adjust UI element sizes for all screens and orientations
+- better scoring formula using the time
+
 
 ## other games
 - spider, with ghost cards after undo

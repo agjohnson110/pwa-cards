@@ -306,6 +306,38 @@ body {
     background-color: rgb(189, 189, 189);
 }
 
+.card.has-move {
+    border-color: #4CAF50;
+    border-width: 2px;
+}
+
+.card.seq-top {
+    border-top:    1px solid blue;
+    border-left:   1px solid blue;
+    border-right:  1px solid blue;
+    border-bottom: 1px solid transparent;
+}
+
+.card.seq-mid {
+    /*border-top:    2px solid transparent;*/
+    border-top:    1px solid rgba(97, 97, 97, 0.85);
+    border-left:   1px solid blue;
+    border-right:  1px solid blue;
+    border-bottom: 1px solid transparent;
+}
+
+.card.seq-bot {
+    /*border-top:    2px solid transparent;*/
+    border-top:    1px solid rgba(97, 97, 97, 0.85);
+    border-left:   1px solid blue;
+    border-right:  1px solid blue;
+    border-bottom: 1px solid blue;
+}
+
+.card.seq-solo {
+    border: 2px solid gold;
+}
+
 #win-message,
 #middle-btn-new-game {
     position: fixed;

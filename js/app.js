@@ -1,6 +1,6 @@
 // Freecell Game Logic
 
-const VERSION = '0.1.1';
+const VERSION = '0.2.0';
 
 class Card {
     constructor(suit, rank) {
@@ -92,6 +92,8 @@ class FreecellGame {
             showTime:       true,
             autoMove:       true,
             showNumberBar:  true,
+            showHints:      true,
+            showGrouping:   true,
             darkMode:       false,
         };
     }
@@ -118,6 +120,8 @@ class FreecellGame {
         document.body.classList.toggle('hide-score',      !this.settings.showScore);
         document.body.classList.toggle('hide-moves',      !this.settings.showMoves);
         document.body.classList.toggle('hide-time',       !this.settings.showTime);
+        this.updateHints();
+        this.updateSequenceOutlines();
     }
 
     // ─── Statistics Persistence ───────────────────────────────────────────────────
@@ -259,6 +263,8 @@ class FreecellGame {
         }
 
         //TODO this.adjustColumnSpacing();
+        this.updateHints();
+        this.updateSequenceOutlines();
     }
 
     // Full render: syncs DOM then runs animated auto-moves.
@@ -451,6 +457,14 @@ class FreecellGame {
                         <label class="settings-toggle-row">
                             <span class="toggle-label">Show Number Bar</span>
                             <div class="toggle-switch ${this.settings.showNumberBar ? 'on' : ''}" data-setting="showNumberBar"></div>
+                        </label>
+                        <label class="settings-toggle-row">
+                            <span class="toggle-label">Highlight Valid Moves</span>
+                            <div class="toggle-switch ${this.settings.showHints ? 'on' : ''}" data-setting="showHints"></div>
+                        </label>
+                        <label class="settings-toggle-row">
+                            <span class="toggle-label">Highlight Grouped Cards</span>
+                            <div class="toggle-switch ${this.settings.showGrouping ? 'on' : ''}" data-setting="showGrouping"></div>
                         </label>
                         <label class="settings-toggle-row">
                             <span class="toggle-label">Dark Mode</span>
@@ -658,6 +672,46 @@ class FreecellGame {
 
     clearHighlight() {
         document.querySelectorAll('.card').forEach(el => el.classList.remove('highlighted', 'dimmed'));
+    }
+
+    updateSequenceOutlines() {
+        // Clear all existing sequence classes
+        document.querySelectorAll('.card.seq-top, .card.seq-mid, .card.seq-bot, .card.seq-solo')
+            .forEach(el => el.classList.remove('seq-top', 'seq-mid', 'seq-bot', 'seq-solo'));
+
+        if (!this.settings.showGrouping) return;
+
+        for (let i = 0; i < 8; i++) {
+            const col = this.tableau[i];
+            if (col.length === 0) continue;
+
+            // Find all sequence boundaries in this column.
+            // A sequence break occurs when the next card is NOT the correct alternating color
+            // and descending rank from the current card.
+            const breaksBefore = new Set(); // indices where a new sequence starts
+            breaksBefore.add(0);            // first card always starts a sequence
+
+            for (let j = 0; j < col.length - 1; j++) {
+                const curr = col[j];
+                const next = col[j + 1];
+                const isSequence = next.color !== curr.color && next.value === curr.value - 1;
+                if (!isSequence) breaksBefore.add(j + 1);
+            }
+
+            // Now assign classes based on where sequences start and end
+            for (let j = 0; j < col.length; j++) {
+                const isStart = breaksBefore.has(j);
+                const isEnd   = breaksBefore.has(j + 1) || j === col.length - 1;
+
+                let cls;
+                if      ( isStart &&  isEnd) cls = null; // sequence of length 1
+                else if ( isStart && !isEnd) cls = 'seq-top';
+                else if (!isStart &&  isEnd) cls = 'seq-bot';
+                else                         cls = 'seq-mid';
+
+                col[j].element.classList.add(cls);
+            }
+        }
     }
 
     // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -958,6 +1012,75 @@ class FreecellGame {
             destPile.arr.push(...moving);
         } else if (destPile.type === 'cell' || destPile.type === 'foundation') {
             if (moving.length === 1) destPile.arr.push(moving[0]);
+        }
+    }
+
+    updateHints() {
+        // Remove existing hints first
+        document.querySelectorAll('.card.has-move').forEach(el => el.classList.remove('has-move'));
+
+        if (!this.settings.showHints) return;
+
+        // Build all destination piles once, rather than rebuilding per card
+        const destPiles = [
+            ...this.tableau.map((arr, i)    => ({ type: 'column',     index: i, arr })),
+            ...this.freeCells.map((arr, i)  => ({ type: 'cell',       index: i, arr })),
+            ...this.foundations.map((arr,i) => ({ type: 'foundation', index: i, arr })),
+        ];
+
+        // Check free cells — single cards, straightforward
+        for (let i = 0; i < 4; i++) {
+            if (this.freeCells[i].length === 0) continue;
+            const card  = this.freeCells[i][0];
+            const stack = [card];
+            const valid = destPiles.some(dest => {
+                const destEl = document.getElementById(
+                    dest.type === 'column' ? `col${dest.index + 1}` :
+                    dest.type === 'cell'   ? `free${dest.index + 1}` :
+                                            `found${dest.index + 1}`
+                );
+                // Don't count the card's current pile as a valid destination
+                if (destEl === card.element.parentElement) return false;
+                return this.isValidMove(card, stack, dest);
+            });
+            if (valid) card.element.classList.add('has-move');
+        }
+
+        // Check tableau columns — each card and every valid sub-stack starting from it
+        for (let i = 0; i < 8; i++) {
+            const col = this.tableau[i];
+            if (col.length === 0) continue;
+
+            const sourceEl = document.getElementById(`col${i + 1}`);
+
+            for (let j = 0; j < col.length; j++) {
+                const card  = col[j];
+                const stack = col.slice(j); // this card plus everything below it
+
+                // Quickly validate the stack sequence before checking destinations —
+                // if the stack itself isn't a valid sequence, it can't move as a unit
+                let stackValid = true;
+                for (let k = 0; k < stack.length - 1; k++) {
+                    if (stack[k + 1].color === stack[k].color || stack[k + 1].value !== stack[k].value - 1) {
+                        stackValid = false;
+                        break;
+                    }
+                }
+                if (!stackValid) continue;
+
+                // Temporarily set draggedStack so isValidMove's capacity check works correctly
+                const prevStack = this.draggedStack;
+                this.draggedStack = stack;
+
+                const hasValidDest = destPiles.some(dest => {
+                    if (dest.type === 'column' && document.getElementById(`col${dest.index + 1}`) === sourceEl) return false;
+                    return this.isValidMove(card, stack, dest);
+                });
+
+                this.draggedStack = prevStack; // restore
+
+                if (hasValidDest) card.element.classList.add('has-move');
+            }
         }
     }
 
