@@ -1,6 +1,6 @@
 // Freecell Game Logic
 
-const VERSION = '0.1.0';
+const VERSION = '0.1.1';
 
 class Card {
     constructor(suit, rank) {
@@ -317,7 +317,14 @@ class FreecellGame {
             const dy = fromRects[i].top  - toRects[i].top;
             // Skip animation if card didn't actually move (e.g. invalid move snapped back)
             if (dx === 0 && dy === 0) return;
-            el.classList.add('animating'); // elevate z-index during animation
+
+            // z-index based on DOM position within parent so stacked cards
+            // layer correctly during animation. Cards later in the DOM
+            // (higher in the visual stack) get higher z-index.
+            const siblings = Array.from(el.parentElement?.children || []);
+            const domIndex = siblings.indexOf(el);
+            el.style.zIndex = 100 + domIndex; // higher domIndex = higher in the visual stack
+
             el.style.transition = 'none';
             el.style.transform  = `translate(${dx}px, ${dy}px)`;
         });
@@ -330,7 +337,7 @@ class FreecellGame {
                     el.style.transform  = '';
                     el.addEventListener('transitionend', () => {
                         el.style.transition = '';
-                        el.classList.remove('animating'); // reset z-index after animation
+                        el.style.zIndex     = ''; // restore to CSS-controlled value
                     }, { once: true });
                 });
             });
@@ -1074,7 +1081,14 @@ class FreecellGame {
 
         this.history  = [];
         this.moveCount = 0;
-        this.gameStartTime = Date.now(); // reset the timer for the restarted game
+
+        // Clear the old interval and start a fresh one
+        clearInterval(this.timerInterval);
+        this.gameStartTime = Date.now();
+        this.timerInterval = setInterval(() => {
+            const elapsed = Math.floor((Date.now() - this.gameStartTime) / 1000);
+            document.getElementById('timer').textContent = `Time: ${this.formatTime(elapsed)}`;
+        }, 1000);
 
         this.renderDOM();
         this.runAutoMoves();
