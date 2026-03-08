@@ -23,14 +23,11 @@ A Progressive Web App for installable, offline Freecell solitaire, optimized for
 - squish cards when column is to long
 
 ### TODO Features
-- group shading based on how many i can currently move
-- allow pull from foundations
 - face image for face cards JQK
 - win animations and deal?
 - License statement in code. GNU?
 - disable undo/restart at game win
 - display some stats at game win (current vs best time/score/moves, totals)
-- maybe slow down animations
 
 ### TODO settings page
 - stats import

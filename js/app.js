@@ -1,6 +1,6 @@
 // Freecell Game Logic
 
-const VERSION = '0.2.0';
+const VERSION = '0.2.1';
 
 class Card {
     constructor(suit, rank) {
@@ -92,7 +92,7 @@ class FreecellGame {
             showTime:       true,
             autoMove:       true,
             showNumberBar:  true,
-            showHints:      true,
+            showHints:      false,
             showGrouping:   true,
             darkMode:       false,
         };
@@ -128,12 +128,16 @@ class FreecellGame {
 
     defaultStats() {
         return {
-            gamesPlayed:  0,
-            gamesWon:     0,
-            bestMoves:    null,  // null = no win yet
-            bestTime:     null,  // seconds
+            gamesPlayed:   0,
+            gamesWon:      0,
+            bestMoves:     null,  // null = no win yet
+            bestTime:      null,  // seconds
+            bestScore:     null,
             currentStreak: 0,
-            bestStreak:   0,
+            bestStreak:    0,
+            totalMoves:    0,
+            totalTime:     0,
+            totalScore:    0,
         };
     }
 
@@ -174,11 +178,18 @@ class FreecellGame {
         const timeSecs = Math.floor((Date.now() - this.gameStartTime) / 1000);
         clearInterval(this.timerInterval);
 
+        const finalScore = 520 - this.moveCount; //TODO have scoring function for here and UI.
+
         this.stats.gamesWon++;
         this.stats.currentStreak++;
         this.stats.bestStreak  = Math.max(this.stats.bestStreak, this.stats.currentStreak);
         this.stats.bestMoves   = this.stats.bestMoves === null ? this.moveCount  : Math.min(this.stats.bestMoves,  this.moveCount);
         this.stats.bestTime    = this.stats.bestTime  === null ? timeSecs        : Math.min(this.stats.bestTime,   timeSecs);
+        this.stats.bestScore   = this.stats.bestScore  === null ? finalScore      : Math.max(this.stats.bestScore,  finalScore);
+        this.stats.totalMoves += this.moveCount;
+        this.stats.totalTime  += timeSecs;
+        this.stats.totalScore += finalScore;
+
         this.saveStats();
     }
 
@@ -252,14 +263,12 @@ class FreecellGame {
         for (let i = 0; i < 4; i++) {
             const found = document.getElementById(`found${i + 1}`);
             found.innerHTML = '';
-            if (this.foundations[i].length > 0) {
-                found.appendChild(this.foundations[i][this.foundations[i].length - 1].element);
-            }
+            for (const card of this.foundations[i]) found.appendChild(card.element);
         }
         for (let i = 0; i < 8; i++) {
             const col = document.getElementById(`col${i + 1}`);
             col.innerHTML = '';
-            for (let card of this.tableau[i]) col.appendChild(card.element);
+            for (const card of this.tableau[i]) col.appendChild(card.element);
         }
 
         //TODO this.adjustColumnSpacing();
@@ -318,19 +327,22 @@ class FreecellGame {
     animateCards(cardEls, fromRects) {
         const toRects = cardEls.map(el => el.getBoundingClientRect());
 
+        // Collect all destination parents so we can set z-index on their entire contents
+        const affectedParents = new Set(cardEls.map(el => el.parentElement).filter(Boolean));
+
+        // Set z-index on every card in every affected column, not just the moving ones.
+        // This ensures cards already in the destination don't float above the arriving card.
+        affectedParents.forEach(parent => {
+            Array.from(parent.children).forEach((el, i) => {
+                el.style.zIndex = 100 + i;
+            });
+        });
+
         cardEls.forEach((el, i) => {
             const dx = fromRects[i].left - toRects[i].left;
             const dy = fromRects[i].top  - toRects[i].top;
             // Skip animation if card didn't actually move (e.g. invalid move snapped back)
             if (dx === 0 && dy === 0) return;
-
-            // z-index based on DOM position within parent so stacked cards
-            // layer correctly during animation. Cards later in the DOM
-            // (higher in the visual stack) get higher z-index.
-            const siblings = Array.from(el.parentElement?.children || []);
-            const domIndex = siblings.indexOf(el);
-            el.style.zIndex = 100 + domIndex; // higher domIndex = higher in the visual stack
-
             el.style.transition = 'none';
             el.style.transform  = `translate(${dx}px, ${dy}px)`;
         });
@@ -339,13 +351,22 @@ class FreecellGame {
         requestAnimationFrame(() => {
             requestAnimationFrame(() => {
                 cardEls.forEach(el => {
-                    el.style.transition = 'transform 0.2s ease';
+                    el.style.transition = 'transform 0.3s ease';
                     el.style.transform  = '';
                     el.addEventListener('transitionend', () => {
                         el.style.transition = '';
-                        el.style.zIndex     = ''; // restore to CSS-controlled value
                     }, { once: true });
                 });
+
+                // Clear all z-index overrides after the animation completes.
+                // Use the duration + a small buffer to ensure all transitions are done.
+                setTimeout(() => {
+                    affectedParents.forEach(parent => {
+                        Array.from(parent.children).forEach(el => {
+                            el.style.zIndex = '';
+                        });
+                    });
+                }, 350); // slightly longer than the 0.3s transition
             });
         });
     }
@@ -483,32 +504,68 @@ class FreecellGame {
                     </div>
 
                     <div class="stats-grid">
+                        
                         <div class="stat-cell">
-                            <div class="stat-value">${this.stats.gamesPlayed}</div>
-                            <div class="stat-label">Played</div>
+                            <div class="stat-value">${this.stats.gamesWon}</div>
+                            <div class="stat-label">Won</div>
                         </div>
                         <div class="stat-cell">
                             <div class="stat-value">${this.stats.gamesPlayed > 0 ? Math.round((this.stats.gamesWon / this.stats.gamesPlayed) * 100) : 0}%</div>
                             <div class="stat-label">Win Rate</div>
                         </div>
                         <div class="stat-cell">
-                            <div class="stat-value">${this.stats.currentStreak}</div>
-                            <div class="stat-label">Current Streak</div>
+                            <div class="stat-value">${this.stats.gamesPlayed}</div>
+                            <div class="stat-label">Total Played</div>
                         </div>
-                        <div class="stat-cell">
-                            <div class="stat-value">${this.stats.bestStreak}</div>
-                            <div class="stat-label">Best Streak</div>
-                        </div>
+
                         <div class="stat-cell">
                             <div class="stat-value">${this.stats.bestMoves ?? '—'}</div>
                             <div class="stat-label">Best Moves</div>
                         </div>
                         <div class="stat-cell">
+                            <div class="stat-value">${this.stats.gamesWon > 0 ? Math.round(this.stats.totalMoves / this.stats.gamesWon) : '—'}</div>
+                            <div class="stat-label">Avg Moves</div>
+                        </div>
+                        <div class="stat-cell">
+                            <div class="stat-value">${this.stats.totalMoves}</div>
+                            <div class="stat-label">Total Moves</div>
+                        </div>
+
+                        <div class="stat-cell">
                             <div class="stat-value">${this.stats.bestTime ? this.formatTime(this.stats.bestTime) : '—'}</div>
                             <div class="stat-label">Best Time</div>
                         </div>
-                    </div>
+                        <div class="stat-cell">
+                            <div class="stat-value">${this.stats.gamesWon > 0 ? this.formatTime(Math.round(this.stats.totalTime / this.stats.gamesWon)) : '—'}</div>
+                            <div class="stat-label">Avg Time</div>
+                        </div>
+                        <div class="stat-cell">
+                            <div class="stat-value">${this.formatTime(this.stats.totalTime)}</div>
+                            <div class="stat-label">Total Time</div>
+                        </div>
 
+                        <div class="stat-cell">
+                            <div class="stat-value">${this.stats.bestScore ?? '—'}</div>
+                            <div class="stat-label">Best Score</div>
+                        </div>
+                        <div class="stat-cell">
+                            <div class="stat-value">${this.stats.gamesWon > 0 ? Math.round(this.stats.totalScore / this.stats.gamesWon) : '—'}</div>
+                            <div class="stat-label">Avg Score</div>
+                        </div>
+                        <div class="stat-cell">
+                            <div class="stat-value">${this.stats.totalScore}</div>
+                            <div class="stat-label">Total Score</div>
+                        </div>
+
+                        <div class="stat-cell">
+                            <div class="stat-value">${this.stats.bestStreak}</div>
+                            <div class="stat-label">Best Streak</div>
+                        </div>
+                        <div class="stat-cell">
+                            <div class="stat-value">${this.stats.currentStreak}</div>
+                            <div class="stat-label">Current Streak</div>
+                        </div>
+                    </div>
                     <div class="settings-divider"></div>
 
                     <button class="settings-danger-btn" id="btn-reset-stats">Reset Statistics</button>
@@ -1159,7 +1216,7 @@ class FreecellGame {
                     el.style.transform  = `translate(${dx}px, ${dy}px)`;
                     requestAnimationFrame(() => {
                         requestAnimationFrame(() => {
-                            el.style.transition = 'transform 0.2s ease';
+                            el.style.transition = 'transform 0.3s ease';
                             el.style.transform  = '';
                             el.addEventListener('transitionend', () => {
                                 el.style.transition = '';

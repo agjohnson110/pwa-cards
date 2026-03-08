@@ -62,7 +62,7 @@ body {
     border-radius: 8%;
     background-color: rgba(255, 255, 255, 0.2);
     border: 1px solid #008000;
-    display: flex;
+    display: block;
     align-items: center;
     justify-content: center;
     position: relative;
@@ -273,14 +273,22 @@ body {
     margin-right: auto;
 }
 
-/* Ensure cards placed in freecells and foundations don't overlap */
-.cell .card,
-.foundation .card {
+/* Ensure cards placed in freecells don't overlap */
+.cell .card {
     margin-top: 0;
     margin-left: auto;
     margin-right: auto;
     position: relative;
     z-index: 1;
+}
+
+.foundation .card {
+    margin-top: -140%;
+    width: 100%;
+}
+
+.foundation .card:first-child {
+    margin-top: 0;
 }
 
 .card.red { background-color: white; color: red; }
