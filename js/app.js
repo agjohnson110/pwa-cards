@@ -1,6 +1,6 @@
 // Freecell Game Logic
 
-const VERSION = '0.2.1';
+const VERSION = '0.3.0';
 
 class Card {
     constructor(suit, rank) {
@@ -271,9 +271,13 @@ class FreecellGame {
             for (const card of this.tableau[i]) col.appendChild(card.element);
         }
 
-        //TODO this.adjustColumnSpacing();
         this.updateHints();
         this.updateSequenceOutlines();
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                this.adjustColumnSpacing();
+            });
+        });
     }
 
     // Full render: syncs DOM then runs animated auto-moves.
@@ -298,24 +302,25 @@ class FreecellGame {
                 continue;
             }
 
-            colEl.style.removeProperty('--card-offset');
-
             const firstCard   = cards[0];
-            const lastCard    = cards[cards.length - 1];
             const cardHeight  = firstCard.getBoundingClientRect().height;
-            const colTop      = colEl.getBoundingClientRect().top;
-            const stackBottom = lastCard.getBoundingClientRect().bottom;
-
-            if (stackBottom <= colTop + tableauHeight) continue; // fits fine
-
-            const availableHeight = tableauHeight - cardHeight;
-            const numOverlapping  = cards.length - 1;
-            const offsetPx        = -(availableHeight / numOverlapping - cardHeight);
             const cardWidth       = firstCard.getBoundingClientRect().width;
-            const offsetPercent   = (offsetPx / cardWidth) * 100;
-            const clamped         = Math.max(-95, Math.min(-10, offsetPercent));
+            const defaultMargin = -90;
+            const defaultOverlap = defaultMargin * cardWidth * -.01;
+            const defaultPeak = cardHeight - defaultOverlap;
+            const defaultBottom = cardHeight + (cards.length - 1) * defaultPeak;
 
-            colEl.style.setProperty('--card-offset', `${clamped.toFixed(1)}%`);
+            if (defaultBottom < tableauHeight) {
+                colEl.style.removeProperty('--card-offset'); // default fits, reset to default
+                continue;
+            }
+
+            const availableHeight = tableauHeight - cardHeight; // space for overlapping cards
+            const numOverlapping  = cards.length - 1;
+            const desiredPeakPx = (availableHeight / numOverlapping);
+            const desiredOverlapPx = cardHeight - desiredPeakPx;
+            const newMarginTop = (desiredOverlapPx/cardWidth) * -100;
+            colEl.style.setProperty('--card-offset', `${newMarginTop.toFixed(1)}%`);
         }
     }
 
@@ -695,6 +700,15 @@ class FreecellGame {
         
         // Safety net: if the pointer leaves the number bar entirely, clear the highlight
         numBar.addEventListener('pointerleave', (e) => { if (e.pointerType !== 'touch') this.clearHighlight(); });
+
+        // redo column spacing on orientation change and viewport size changes
+        window.addEventListener('resize', () => {
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    this.adjustColumnSpacing();
+                });
+            });
+        });
     }
 
     // ─── Card Highlight ───────────────────────────────────────────────────────────

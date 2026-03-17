@@ -1,3 +1,8 @@
+html, body {
+    height: 100%;
+    overflow: hidden;
+}
+
 body {
     font-family: Arial, sans-serif;
     margin: 0;
@@ -17,6 +22,8 @@ body {
     align-items: center;
     width: 100%;
     flex: 1;
+    height: 100vh;
+    overflow: hidden;
 }
 
 #score-bar {
@@ -55,6 +62,7 @@ body {
     width: 100%;
     flex: 1;
     align-items: stretch; /* Ensure columns stretch to fill available vertical space, should be default */
+    overflow: hidden;
 }
 
 .cell, .foundation {
@@ -113,7 +121,7 @@ body {
     font-size: clamp(8px, 0.9vw, 18px); /* scalable base */
     font-weight: bold;
     color: black;
-    margin-top: -90%;
+    margin-top: var(--card-offset, -90%);
     cursor: pointer;
     user-select: none;
     position: relative;
@@ -320,26 +328,23 @@ body {
 }
 
 .card.seq-top {
-    border-top:    1px solid blue;
-    border-left:   1px solid blue;
-    border-right:  1px solid blue;
-    border-bottom: 1px solid transparent;
+    box-shadow:
+        inset -3px 0px 0px 0px lightblue,   /* left */
+        inset  3px 0px 0px 0px lightblue,   /* right */
+        inset  0px 3px 0px 0px lightblue;  /* top */
 }
 
 .card.seq-mid {
-    /*border-top:    2px solid transparent;*/
-    border-top:    1px solid rgba(97, 97, 97, 0.85);
-    border-left:   1px solid blue;
-    border-right:  1px solid blue;
-    border-bottom: 1px solid transparent;
+    box-shadow:
+        inset -3px 0px 0px 0px lightblue,   /* left */
+        inset  3px 0px 0px 0px lightblue;   /* right */
 }
 
 .card.seq-bot {
-    /*border-top:    2px solid transparent;*/
-    border-top:    1px solid rgba(97, 97, 97, 0.85);
-    border-left:   1px solid blue;
-    border-right:  1px solid blue;
-    border-bottom: 1px solid blue;
+    box-shadow:
+        inset -3px 0px 0px 0px lightblue,   /* left */
+        inset  3px 0px 0px 0px lightblue,   /* right */
+        inset  0px -3px 0px 0px lightblue;   /* bottom */
 }
 
 .card.seq-solo {
