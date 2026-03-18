@@ -172,8 +172,8 @@ body {
     /*top: calc(env(safe-area-inset-top) + 10px); /* Adjust for safe area inset on mobile devices */
     top: 0;
     font-size: 24px;
-    /*background-color: #4e4e4e;*/
-    background-color: #008000;
+    background-color: #00000000; /* fully transparent */
+    /*background-color: #008000;*/
     color: white;
     border: none;
     /*border: 1px solid #005c00;*/
@@ -304,7 +304,11 @@ body {
 
 .card.dragging {
     /* opacity: 0.5; */
-    z-index: 1000;
+    position: fixed;
+    z-index: 2000;
+    pointer-events: none;
+    will-change: transform;
+    margin: 0;
 }
 
 .card.animating {
@@ -361,15 +365,58 @@ body {
 }
 
 #win-message {
-    top: 57%;
+    top: 50%;
     margin: 0;
     font-size: 2em;
     color: white;
     text-shadow: 0 2px 8px rgba(0,0,0,0.4);
 }
 
+#win-stats {
+    position: fixed;
+    left: 50%;
+    transform: translateX(-50%);
+    top: 56%;
+    z-index: 500;
+    display: none;
+    background: rgba(0,0,0,0.45);
+    border-radius: 12px;
+    padding: 10px 18px;
+    color: white;
+    font-size: 14px;
+    text-align: center;
+    white-space: nowrap;
+}
+
+#win-stats table {
+    border-collapse: collapse;
+}
+
+#win-stats td {
+    padding: 3px 10px;
+}
+
+#win-stats .win-stat-label {
+    text-align: left;
+    opacity: 0.75;
+}
+
+#win-stats .win-stat-this {
+    text-align: right;
+    font-weight: bold;
+}
+
+#win-stats .win-stat-best {
+    text-align: left;
+    opacity: 0.75;
+}
+
+#win-stats .win-stat-best.is-best {
+    color: gold;
+}
+
 #middle-btn-new-game {
-    top: 65%;
+    top: 73%;
     display: flex;
     align-items: center;
     gap: 8px;

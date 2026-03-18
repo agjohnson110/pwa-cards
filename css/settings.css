@@ -21,7 +21,7 @@
     border-radius: 16px;
     width: min(340px, 90vw);
     max-height: 85vh;
-    overflow: hidden;
+    overflow: visible;
     box-shadow: 0 8px 40px rgba(0,0,0,0.35);
     position: relative;
     transform: translateY(10px);

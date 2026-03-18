@@ -1,6 +1,6 @@
 // Freecell Game Logic
 
-const VERSION = '0.3.0';
+const VERSION = '0.4.0';
 
 class Card {
     constructor(suit, rank) {
@@ -205,6 +205,7 @@ class FreecellGame {
 
     init() {
         document.getElementById('win-message').style.display = 'none';
+        document.getElementById('win-stats').style.display          = 'none';
         document.getElementById('middle-btn-new-game').style.display = 'none';
         this.updateMovesAndScore();
         this.createDeck();
@@ -835,7 +836,17 @@ class FreecellGame {
             return;
         }
 
-        this.draggedStack.forEach(c => c.element.classList.add('dragging'));
+        // 1. Capture natural positions BEFORE adding .dragging
+        this._dragStartRects = this.draggedStack.map(c => c.element.getBoundingClientRect());
+
+        // 2. Add class AND immediately pin each card to its captured position
+        this.draggedStack.forEach((c, i) => {
+            const r = this._dragStartRects[i];
+            c.element.style.left  = `${r.left}px`;
+            c.element.style.top   = `${r.top}px`;
+            c.element.style.width = `${r.width}px`;
+            c.element.classList.add('dragging');
+        });
     }
 
     handleTouchMove(e) {
@@ -850,8 +861,15 @@ class FreecellGame {
             this.dragNotTap = true;
         }
 
-        this.draggedStack.forEach(c => {
+        /*this.draggedStack.forEach(c => {
             c.element.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
+        });*/
+
+        this.draggedStack.forEach((c, i) => {
+            const origin = this._dragStartRects[i];
+            c.element.style.left  = `${origin.left + deltaX}px`;
+            c.element.style.top   = `${origin.top  + deltaY}px`;
+            c.element.style.width = `${origin.width}px`;
         });
     }
 
@@ -861,6 +879,9 @@ class FreecellGame {
         this.draggedStack.forEach(c => {
             c.element.classList.remove('dragging');
             c.element.style.transform = '';
+            c.element.style.left  = '';
+            c.element.style.top   = '';
+            c.element.style.width = '';
         });
 
         if (this.dragNotTap) {
@@ -906,7 +927,18 @@ class FreecellGame {
             return;
         }
 
-        this.draggedStack.forEach(c => c.element.classList.add('dragging'));
+        // 1. Capture natural positions BEFORE adding .dragging
+        this._dragStartRects = this.draggedStack.map(c => c.element.getBoundingClientRect());
+
+        // 2. Add class AND immediately pin each card to its captured position
+        this.draggedStack.forEach((c, i) => {
+            const r = this._dragStartRects[i];
+            c.element.style.left  = `${r.left}px`;
+            c.element.style.top   = `${r.top}px`;
+            c.element.style.width = `${r.width}px`;
+            c.element.classList.add('dragging');
+        });
+
         try { targetEl.setPointerCapture?.(e.pointerId); } catch {}
     }
 
@@ -922,8 +954,15 @@ class FreecellGame {
             this.dragNotTap = true;
         }
 
-        this.draggedStack.forEach(c => {
+        /*this.draggedStack.forEach(c => {
             c.element.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
+        });*/
+
+        this.draggedStack.forEach((c, i) => {
+            const origin = this._dragStartRects[i];
+            c.element.style.left  = `${origin.left + deltaX}px`;
+            c.element.style.top   = `${origin.top  + deltaY}px`;
+            c.element.style.width = `${origin.width}px`;
         });
     }
 
@@ -934,6 +973,9 @@ class FreecellGame {
         this.draggedStack.forEach(c => {
             c.element.classList.remove('dragging');
             c.element.style.transform = '';
+            c.element.style.left  = '';
+            c.element.style.top   = '';
+            c.element.style.width = '';
         });
 
         if (this.dragNotTap) {
@@ -1027,10 +1069,7 @@ class FreecellGame {
             if (!isDrag) this.animateCards(cardEls, fromRects);
 
             if (this.checkWin()) {
-                this.recordGameWin();
-                document.getElementById('win-message').style.display = 'block';
-                document.getElementById('middle-btn-new-game').style.display = 'flex'; // flex to keep the icon+text row layout
-                // alert('You win!');
+                this.showWinState();
             }
         }
     }
@@ -1257,10 +1296,51 @@ class FreecellGame {
         }
     }
 
-    // ─── Win / Reset ─────────────────────────────────────────────────────────────
-
     checkWin() {
         return this.foundations.every(f => f.length === 13);
+    }
+
+    showWinState() {
+        const timeSecs   = Math.floor((Date.now() - this.gameStartTime) / 1000);
+        const finalScore = 520 - this.moveCount;
+
+        // Capture bests BEFORE recordGameWin() updates them
+        const prevBestTime  = this.stats.bestTime;
+        const prevBestScore = this.stats.bestScore;
+        const prevBestMoves = this.stats.bestMoves;
+        const prevBestStreak = this.stats.bestStreak;
+
+        this.recordGameWin();
+
+        const isNewBestTime  = prevBestTime  === null || timeSecs    < prevBestTime;
+        const isNewBestScore = prevBestScore === null || finalScore  > prevBestScore;
+        const isNewBestMoves = prevBestMoves === null || this.moveCount < prevBestMoves;
+        const isNewBestStreak = prevBestStreak === null || this.stats.currentStreak > prevBestStreak;
+
+        const fmt = s => this.formatTime(s);
+        const row = (label, thisVal, bestVal, isBest) => `
+            <tr>
+                <td class="win-stat-label">${label}</td>
+                <td class="win-stat-this">${thisVal}</td>
+                <td class="win-stat-best ${isBest ? 'is-best' : ''}">${bestVal}${isBest ? ' ★' : ''}</td>
+            </tr>`;
+
+        document.getElementById('win-stats').innerHTML = `
+            <table>
+                <tr>
+                    <td class="win-stat-label"></td>
+                    <td class="win-stat-this"><u>This Game</u></td>
+                    <td class="win-stat-best"><u>Best</u></td>
+                </tr>
+                ${row('Time',   fmt(timeSecs),        fmt(this.stats.bestTime),  isNewBestTime)}
+                ${row('Score',  finalScore,            this.stats.bestScore,      isNewBestScore)}
+                ${row('Moves',  this.moveCount,        this.stats.bestMoves,      isNewBestMoves)}
+                ${row('Streak', this.stats.currentStreak,   this.stats.bestStreak,     isNewBestStreak)}
+            </table>`;
+
+        document.getElementById('win-message').style.display        = 'block';
+        document.getElementById('win-stats').style.display          = 'block';
+        document.getElementById('middle-btn-new-game').style.display = 'flex'; // flex to keep the icon+text row layout
     }
 
     restartGame() {

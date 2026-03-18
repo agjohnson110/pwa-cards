@@ -18,16 +18,21 @@ A Progressive Web App for installable, offline Freecell solitaire, optimized for
 - edit both .js files
 
 ### TODO Bugs
-+ undo breaks z-position of some tableau cards
-+ restarting app required internet connection
-- squish cards when column is to long
++ dragging caused lag, especially from free-cell
++ dragging cards are sometimes under whole top (freecells and foundations)
+- settings menu is too long, bottom not shown
+- after win can:
+  - move foundation cards, changing score
+  - restart and undo
+- resetting stats causes lag spike
+- stats can be wrong, especially win count
+- restarting app required internet connection
 
 ### TODO Features
 - face image for face cards JQK
 - win animations and deal?
 - License statement in code. GNU?
 - disable undo/restart at game win
-- display some stats at game win (current vs best time/score/moves, totals)
 
 ### TODO settings page
 - stats import
