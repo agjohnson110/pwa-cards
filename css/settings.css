@@ -262,6 +262,50 @@
     background: rgba(255, 59, 48, 0.08);
 }
 
+.stats-edit-grid {
+    display: flex;
+    flex-direction: column;
+    padding: 0 16px;
+    gap: 6px;
+}
+
+.stats-edit-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 4px 0;
+    border-bottom: 1px solid rgba(0,0,0,0.06);
+}
+
+.stats-edit-label {
+    font-size: 14px;
+    color: #1a1a1a;
+}
+
+.stats-edit-input {
+    width: 80px;
+    padding: 6px 8px;
+    border: 1px solid rgba(0,0,0,0.15);
+    border-radius: 8px;
+    font-size: 14px;
+    text-align: right;
+    background: white;
+}
+
+body.dark-mode .stats-edit-label {
+    color: #f0f0f0;
+}
+
+body.dark-mode .stats-edit-row {
+    border-bottom-color: rgba(255,255,255,0.08);
+}
+
+body.dark-mode .stats-edit-input {
+    background: #3a3a3a;
+    border-color: rgba(255,255,255,0.15);
+    color: #f0f0f0;
+}
+
 /* ─── Hide Settings ────────────────────────────────────────────────── */
 
 body.hide-number-bar .number-bar {

@@ -27,17 +27,11 @@ A Progressive Web App for installable, offline Freecell solitaire, optimized for
 - restarting app required internet connection
 
 ### TODO Features
-- face image for face cards JQK
 - win animations and deal?
-- License statement in code. GNU?
-
-### TODO settings page
-- stats import
 
 ### TODO final refinement
 - adjust UI element sizes for all screens and orientations
 - better scoring formula using the time
-
 
 ## other games
 - spider, with ghost cards after undo

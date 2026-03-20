@@ -1,6 +1,6 @@
 // Freecell Game Logic
 
-const VERSION = '0.4.0';
+const VERSION = '0.5.0';
 
 class Card {
     constructor(suit, rank) {
@@ -578,6 +578,52 @@ class FreecellGame {
                     <div class="settings-divider"></div>
 
                     <button class="settings-danger-btn" id="btn-reset-stats">Reset Statistics</button>
+                    <button class="settings-action-btn" id="btn-edit-stats">
+                        <span class="action-icon">✏️</span>
+                        <span>Edit Statistics</span>
+                        <span class="action-chevron">›</span>
+                    </button>
+                </div>
+
+                <div class="settings-screen" id="settings-edit-stats">
+                    <div class="settings-header">
+                        <button class="settings-back" id="edit-stats-back">‹</button>
+                        <span class="settings-title">Edit Statistics</span>
+                        <div style="width:2em"></div>
+                    </div>
+                    <div class="settings-text-body">
+                        <p>Enter your stats from another Freecell game to import them here.</p>
+                    </div>
+                    <div class="stats-edit-grid">
+                        ${[
+                            ['gamesPlayed', 'Games Played'],
+                            ['gamesWon',    'Games Won'],
+                            ['bestMoves',   'Best Moves'],
+                            ['totalMoves',  'Total Moves'],
+                            ['bestTime',    'Best Time'],
+                            ['totalTime',   'Total Time'],
+                            ['bestScore',   'Best Score'],
+                            ['totalScore',  'Total Score'],
+                            ['bestStreak',  'Best Streak'],
+                            ['currentStreak','Current Streak'],
+                        ].map(([key, label]) => {
+                            const isTime = key === 'bestTime' || key === 'totalTime';
+                            const value  = isTime ? this.secsToHMS(this.stats[key] ?? 0) : (this.stats[key] ?? 0);
+                            const type   = isTime ? 'text' : 'number';
+                            const placeholder = isTime ? 'h:mm:ss' : '';
+                            return `
+                                <div class="stats-edit-row">
+                                    <label class="stats-edit-label">${label}</label>
+                                    <input class="stats-edit-input" type="${type}" data-stat="${key}" 
+                                        data-is-time="${isTime}" value="${value}" placeholder="${placeholder}">
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                    <button class="settings-action-btn" id="btn-save-stats" style="margin: 8px 16px; width: calc(100% - 32px);">
+                        <span class="action-icon">💾</span>
+                        <span>Save</span>
+                    </button>
                 </div>
 
                 <div class="settings-screen" id="settings-rules">
@@ -662,6 +708,26 @@ class FreecellGame {
             }
         });
 
+        document.getElementById('btn-edit-stats').addEventListener('click', () => {
+            this.showSettingsScreen('settings-edit-stats');
+        });
+        document.getElementById('edit-stats-back').addEventListener('click', () => {
+            this.showSettingsScreen('settings-stats');
+        });
+        document.getElementById('btn-save-stats').addEventListener('click', () => {
+            const inputs = document.querySelectorAll('.stats-edit-input');
+            inputs.forEach(input => {
+                const key    = input.dataset.stat;
+                const isTime = input.dataset.isTime === 'true';
+                const val    = isTime ? this.HMSToSecs(input.value) : parseInt(input.value, 10);
+                if (val !== null && !isNaN(val) && val >= 0) this.stats[key] = val;
+            });
+            this.saveStats();
+            this.showSettingsScreen('settings-stats');
+            this.closeSettings();
+            this.openSettings(); // refresh displayed values
+        });
+
         document.getElementById('btn-rules').addEventListener('click', () => {
             this.showSettingsScreen('settings-rules');
         });
@@ -715,6 +781,22 @@ class FreecellGame {
         const m = Math.floor(seconds / 60);
         const s = seconds % 60;
         return `${m}:${s.toString().padStart(2, '0')}`;
+    }
+
+    secsToHMS(totalSecs) {
+        const h = Math.floor(totalSecs / 3600);
+        const m = Math.floor((totalSecs % 3600) / 60);
+        const s = totalSecs % 60;
+        return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    }
+
+    HMSToSecs(str) {
+        const parts = str.split(':').map(p => parseInt(p, 10));
+        if (parts.some(isNaN)) return null;
+        if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+        if (parts.length === 2) return parts[0] * 60 + parts[1]; // also accept mm:ss
+        if (parts.length === 1) return parts[0];                  // also accept raw seconds
+        return null;
     }
 
     // ─── Event Listeners ─────────────────────────────────────────────────────────
