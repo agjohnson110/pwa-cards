@@ -92,7 +92,6 @@ class FreecellGame {
             showTime:       true,
             autoMove:       true,
             showNumberBar:  true,
-            showHints:      false,
             showGrouping:   true,
             darkMode:       false,
         };
@@ -120,7 +119,6 @@ class FreecellGame {
         document.body.classList.toggle('hide-score',      !this.settings.showScore);
         document.body.classList.toggle('hide-moves',      !this.settings.showMoves);
         document.body.classList.toggle('hide-time',       !this.settings.showTime);
-        this.updateHints();
         this.updateSequenceOutlines();
     }
 
@@ -272,7 +270,6 @@ class FreecellGame {
             for (const card of this.tableau[i]) col.appendChild(card.element);
         }
 
-        this.updateHints();
         this.updateSequenceOutlines();
         requestAnimationFrame(() => {
             requestAnimationFrame(() => {
@@ -460,6 +457,16 @@ class FreecellGame {
                             <span>Statistics</span>
                             <span class="action-chevron">›</span>
                         </button>
+                        <button class="settings-action-btn" id="btn-rules">
+                            <span class="action-icon">📖</span>
+                            <span>Rules</span>
+                            <span class="action-chevron">›</span>
+                        </button>
+                        <button class="settings-action-btn" id="btn-share">
+                            <span class="action-icon">🔗</span>
+                            <span>Share & Install</span>
+                            <span class="action-chevron">›</span>
+                        </button>
                     </div>
 
                     <div class="settings-divider"></div>
@@ -484,10 +491,6 @@ class FreecellGame {
                         <label class="settings-toggle-row">
                             <span class="toggle-label">Show Number Bar</span>
                             <div class="toggle-switch ${this.settings.showNumberBar ? 'on' : ''}" data-setting="showNumberBar"></div>
-                        </label>
-                        <label class="settings-toggle-row">
-                            <span class="toggle-label">Highlight Valid Moves</span>
-                            <div class="toggle-switch ${this.settings.showHints ? 'on' : ''}" data-setting="showHints"></div>
                         </label>
                         <label class="settings-toggle-row">
                             <span class="toggle-label">Highlight Grouped Cards</span>
@@ -577,6 +580,44 @@ class FreecellGame {
                     <button class="settings-danger-btn" id="btn-reset-stats">Reset Statistics</button>
                 </div>
 
+                <div class="settings-screen" id="settings-rules">
+                    <div class="settings-header">
+                        <button class="settings-back" id="rules-back">‹</button>
+                        <span class="settings-title">Rules</span>
+                        <div style="width:2em"></div>
+                    </div>
+                    <div class="settings-text-body">
+                        <h3>Objective</h3>
+                        <p>Move all 52 cards to the four foundation piles. The game is won when all cards are on the foundations.</p>
+                        <h3>Foundations</h3>
+                        <p>The four foundation piles in the top left are built up by suit from Ace to King.</p>
+                        <h3>Free Cells</h3>
+                        <p>The four cells in the top right can each hold any one card temporarily.</p>
+                        <h3>Tableau</h3>
+                        <p>Cards placed on a column must be one rank lower and opposite in color to the card they're placed on.</p>
+                        <h3>Moves</h3>
+                        <p>You move cards one at a time. You may move a sequence of cards if you have enough free cells and empty columns.</p>
+                    </div>
+                </div>
+
+                <div class="settings-screen" id="settings-share">
+                    <div class="settings-header">
+                        <button class="settings-back" id="share-back">‹</button>
+                        <span class="settings-title">Share & Install</span>
+                        <div style="width:2em"></div>
+                    </div>
+                    <div class="settings-text-body">
+                        <h3>1. Discover in Browser</h3>
+                        <p>Share this URL with anyone:</p>
+                        <div class="share-url">${window.location.origin}</div>
+                        <div id="qr-code"></div>
+                        <h3>2. Add to Home Screen</h3>
+                        <p><strong>iPhone / iPad:</strong> Tap the Share button (□↑) in Safari, then tap <em>Add to Home Screen</em>.</p>
+                        <p><strong>Android:</strong> Tap the menu (⋮) in Chrome, then tap <em>Add to Home Screen</em>.</p>
+                        <p><strong>Desktop:</strong> Click the install icon (⊕) in the address bar in Chrome or Edge.</p>
+                    </div>
+                </div>
+
             </div>
         `;
 
@@ -621,6 +662,21 @@ class FreecellGame {
             }
         });
 
+        document.getElementById('btn-rules').addEventListener('click', () => {
+            this.showSettingsScreen('settings-rules');
+        });
+        document.getElementById('rules-back').addEventListener('click', () => {
+            this.showSettingsScreen('settings-main');
+        });
+
+        document.getElementById('btn-share').addEventListener('click', () => {
+            this.showSettingsScreen('settings-share');
+            this.renderQRCode();
+        });
+        document.getElementById('share-back').addEventListener('click', () => {
+            this.showSettingsScreen('settings-main');
+        });
+
         // Toggle switches
         overlay.querySelectorAll('.toggle-switch').forEach(toggle => {
             toggle.addEventListener('click', () => {
@@ -643,6 +699,16 @@ class FreecellGame {
         if (!overlay) return;
         overlay.classList.remove('visible');
         overlay.addEventListener('transitionend', () => overlay.remove(), { once: true });
+    }
+
+    renderQRCode() {
+        const el = document.getElementById('qr-code');
+        if (!el || el.childElementCount > 0) return; // only render once
+        new QRCode(el, {
+            text: window.location.origin,
+            width: 160,
+            height: 160,
+        });
     }
 
     formatTime(seconds) {
@@ -1122,75 +1188,6 @@ class FreecellGame {
             destPile.arr.push(...moving);
         } else if (destPile.type === 'cell' || destPile.type === 'foundation') {
             if (moving.length === 1) destPile.arr.push(moving[0]);
-        }
-    }
-
-    updateHints() {
-        // Remove existing hints first
-        document.querySelectorAll('.card.has-move').forEach(el => el.classList.remove('has-move'));
-
-        if (!this.settings.showHints) return;
-
-        // Build all destination piles once, rather than rebuilding per card
-        const destPiles = [
-            ...this.tableau.map((arr, i)    => ({ type: 'column',     index: i, arr })),
-            ...this.freeCells.map((arr, i)  => ({ type: 'cell',       index: i, arr })),
-            ...this.foundations.map((arr,i) => ({ type: 'foundation', index: i, arr })),
-        ];
-
-        // Check free cells — single cards, straightforward
-        for (let i = 0; i < 4; i++) {
-            if (this.freeCells[i].length === 0) continue;
-            const card  = this.freeCells[i][0];
-            const stack = [card];
-            const valid = destPiles.some(dest => {
-                const destEl = document.getElementById(
-                    dest.type === 'column' ? `col${dest.index + 1}` :
-                    dest.type === 'cell'   ? `free${dest.index + 1}` :
-                                            `found${dest.index + 1}`
-                );
-                // Don't count the card's current pile as a valid destination
-                if (destEl === card.element.parentElement) return false;
-                return this.isValidMove(card, stack, dest);
-            });
-            if (valid) card.element.classList.add('has-move');
-        }
-
-        // Check tableau columns — each card and every valid sub-stack starting from it
-        for (let i = 0; i < 8; i++) {
-            const col = this.tableau[i];
-            if (col.length === 0) continue;
-
-            const sourceEl = document.getElementById(`col${i + 1}`);
-
-            for (let j = 0; j < col.length; j++) {
-                const card  = col[j];
-                const stack = col.slice(j); // this card plus everything below it
-
-                // Quickly validate the stack sequence before checking destinations —
-                // if the stack itself isn't a valid sequence, it can't move as a unit
-                let stackValid = true;
-                for (let k = 0; k < stack.length - 1; k++) {
-                    if (stack[k + 1].color === stack[k].color || stack[k + 1].value !== stack[k].value - 1) {
-                        stackValid = false;
-                        break;
-                    }
-                }
-                if (!stackValid) continue;
-
-                // Temporarily set draggedStack so isValidMove's capacity check works correctly
-                const prevStack = this.draggedStack;
-                this.draggedStack = stack;
-
-                const hasValidDest = destPiles.some(dest => {
-                    if (dest.type === 'column' && document.getElementById(`col${dest.index + 1}`) === sourceEl) return false;
-                    return this.isValidMove(card, stack, dest);
-                });
-
-                this.draggedStack = prevStack; // restore
-
-                if (hasValidDest) card.element.classList.add('has-move');
-            }
         }
     }
 

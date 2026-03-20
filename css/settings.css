@@ -369,3 +369,51 @@ body.dark-mode .stat-value {
 body.dark-mode .settings-version {
     color: #666;
 }
+
+/* ─── Rules and Share ──────────────────────────────────────────────────────────────── */
+
+.settings-text-body {
+    padding: 4px 16px 16px;
+    font-size: 14px;
+    color: #1a1a1a;
+    line-height: 1.5;
+}
+
+.settings-text-body h3 {
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #888;
+    margin: 16px 0 4px;
+}
+
+.settings-text-body p {
+    margin: 0 0 8px;
+}
+
+.share-url {
+    background: white;
+    border: 1px solid rgba(0,0,0,0.1);
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-family: monospace;
+    font-size: 13px;
+    word-break: break-all;
+    margin-bottom: 12px;
+}
+
+#qr-code {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 8px;
+}
+
+body.dark-mode .settings-text-body {
+    color: #f0f0f0;
+}
+
+body.dark-mode .share-url {
+    background: #3a3a3a;
+    border-color: rgba(255,255,255,0.1);
+    color: #f0f0f0;
+}

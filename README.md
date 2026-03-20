@@ -18,8 +18,6 @@ A Progressive Web App for installable, offline Freecell solitaire, optimized for
 - edit both .js files
 
 ### TODO Bugs
-+ dragging caused lag, especially from free-cell
-+ dragging cards are sometimes under whole top (freecells and foundations)
 - settings menu is too long, bottom not shown
 - after win can:
   - move foundation cards, changing score
@@ -32,14 +30,9 @@ A Progressive Web App for installable, offline Freecell solitaire, optimized for
 - face image for face cards JQK
 - win animations and deal?
 - License statement in code. GNU?
-- disable undo/restart at game win
 
 ### TODO settings page
 - stats import
-- share this qr code page
-- rules
-- maybe help icons for some settings
-- maybe debug mode (ignore card placement rules)
 
 ### TODO final refinement
 - adjust UI element sizes for all screens and orientations
@@ -48,4 +41,7 @@ A Progressive Web App for installable, offline Freecell solitaire, optimized for
 
 ## other games
 - spider, with ghost cards after undo
+  - create separate html, js, manifest 
+  - copy css
+  - extract drag/drop handlers, animation code, column spacing, settings into a shared js
 - sudoku, with single cell super pencil, number selector with . indicator for remaining, and full color
