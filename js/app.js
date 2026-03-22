@@ -2,229 +2,167 @@
 
 const VERSION = '0.5.0';
 
-class Card {
-    constructor(suit, rank) {
-        this.suit = suit;
-        this.rank = rank;
-        this.value = this.getValue(rank);
-        this.color = (suit === 'hearts' || suit === 'diamonds') ? 'red' : 'black';
-        this.id = `${suit}-${rank}`;
-        this.element = this.createElement(); // create once, keep forever
-    }
-
-    getValue(rank) {
-        const values = { 'A': 1, '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9, '10': 10, 'J': 11, 'Q': 12, 'K': 13 };
-        return values[rank];
-    }
-
-    getSuitSymbol() {
-        // Unicode suit symbols for better visuals
-        const map = { 'hearts': '\u2665', 'diamonds': '\u2666', 'clubs': '\u2663', 'spades': '\u2660' };
-        return map[this.suit] || this.suit[0].toUpperCase();
-    }
-
-    // Create a DOM element for this card with appropriate classes and data attributes
-    createElement() {
-        const el = document.createElement('div');
-        el.className = `card ${this.color}`;
-        el.dataset.suit = this.suit;
-        el.dataset.rank = this.rank;
-        el.dataset.value = this.value;
-        el.dataset.color = this.color;
-        el.dataset.cardId = this.id;
-        el.setAttribute('role', 'img');
-        el.setAttribute('aria-label', `${this.rank} of ${this.suit}`);
-
-        // Corners: rank top-left / bottom-right, suit top-right / bottom-left
-        const suit = this.getSuitSymbol();
-        el.innerHTML = `
-            <span class="corner tl rank">${this.rank}</span>
-            <span class="corner tr suit">${suit}</span>
-            <span class="corner bl suit">${suit}</span>
-            <span class="corner br rank">${this.rank}</span>
-            <div class="center-suit">${suit}</div>
-        `;
-
-        // Link DOM → model
-        el.cardRef = this;
-        return el;
-    }
-}
-
 class FreecellGame {
     constructor() {
-        this.deck = []; // id → Card, permanent lookup for all 52 cards
-        this.cardMap = {};
-        this.freeCells = [[], [], [], []]; // arrays of Card
-        this.foundations = [[], [], [], []]; // arrays of Card
-        this.tableau = [[], [], [], [], [], [], [], []]; // arrays of Card
+        // ─── Game state ───────────────────────────────────────────────────────
+        this.deck        = [];
+        this.cardMap     = {};
+        this.freeCells   = [[], [], [], []];
+        this.foundations = [[], [], [], []];
+        this.tableau     = [[], [], [], [], [], [], [], []];
+        this.history     = [];
+        this.moveCount   = 0;
+        this.gameActive  = false;
 
-        this.draggedCard = null; // Card
-        this.draggedStack = [];  // Card[]
-        this.touchStartX = 0;
-        this.touchStartY = 0;
-        this.dragNotTap = false;
-        this.tapThreshold = 8; // px movement allowed before it's considered a drag
-        this.history = []; // for undo
+        // ─── Shared: Storage ─────────────────────────────────────────────────
+        this.settingsStorage = new StorageManager('freecell-settings');
+        this.statsStorage    = new StorageManager('freecell-stats');
 
-        // Settings — loaded from localStorage, with defaults
-        this.settings = this.loadSettings();
+        // ─── Shared: Settings ────────────────────────────────────────────────
+        this.settings = new SettingsManager(
+            this.settingsStorage,
+            {
+                showScore:     true,
+                showMoves:     true,
+                showTime:      true,
+                autoMove:      true,
+                showNumberBar: true,
+                showGrouping:  true,
+                darkMode:      false,
+            },
+            {
+                darkMode:      'dark-mode',
+                showScore:     'hide-score',
+                showMoves:     'hide-moves',
+                showTime:      'hide-time',
+                showNumberBar: 'hide-number-bar',
+            },
+            () => this.updateSequenceOutlines() // freecell-specific onApply hook
+        );
 
-        // Statistics — loaded from localStorage
-        this.stats = this.loadStats();
+        // ─── Shared: Stats ───────────────────────────────────────────────────
+        this.stats = new StatsManager(
+            this.statsStorage,
+            {
+                gamesPlayed:   0,
+                gamesWon:      0,
+                bestMoves:     null,
+                bestTime:      null,
+                bestScore:     null,
+                currentStreak: 0,
+                bestStreak:    0,
+                totalMoves:    0,
+                totalTime:     0,
+                totalScore:    0,
+            }
+        );
 
-        // Game session tracking
-        this.gameStartTime = null;
-        this.moveCount = 0;
-        this.gameActive = false;
+        // ─── Shared: Timer ───────────────────────────────────────────────────
+        this.timer = new GameTimer(formatted => {
+            document.getElementById('timer').textContent = `Time: ${formatted}`;
+        });
 
-        this.init();
+        // ─── Shared: Column layout ───────────────────────────────────────────
+        this.layout = new ColumnLayout({
+            tableauId:    'tableau',
+            columnPrefix: 'col',
+            columnCount:  8,
+        });
+
+        // ─── Shared: Settings UI ─────────────────────────────────────────────
+        this.settingsUI = new SettingsUI({
+            version:  VERSION,
+            settings: this.settings,
+            stats:    this.stats,
+            toggles: [
+                { key: 'showScore',     label: 'Show Score'                },
+                { key: 'showMoves',     label: 'Show Moves'                },
+                { key: 'showTime',      label: 'Show Timer'                },
+                { key: 'autoMove',      label: 'Auto-move to Foundation'   },
+                { key: 'showNumberBar', label: 'Show Number Bar'           },
+                { key: 'showGrouping',  label: 'Highlight Grouped Cards'   },
+                { key: 'darkMode',      label: 'Dark Mode'                 },
+            ],
+            statFields: [
+                { key: 'gamesPlayed',   label: 'Games Played',   isTime: false },
+                { key: 'gamesWon',      label: 'Games Won',      isTime: false },
+                { key: 'bestMoves',     label: 'Best Moves',     isTime: false },
+                { key: 'totalMoves',    label: 'Total Moves',    isTime: false },
+                { key: 'bestTime',      label: 'Best Time',      isTime: true  },
+                { key: 'totalTime',     label: 'Total Time',     isTime: true  },
+                { key: 'bestScore',     label: 'Best Score',     isTime: false },
+                { key: 'totalScore',    label: 'Total Score',    isTime: false },
+                { key: 'bestStreak',    label: 'Best Streak',    isTime: false },
+                { key: 'currentStreak', label: 'Current Streak', isTime: false },
+            ],
+            rulesHTML: `
+                <h3>Objective</h3>
+                <p>Move all 52 cards to the four foundation piles. The game is won when all cards are on the foundations.</p>
+                <h3>Foundations</h3>
+                <p>The four foundation piles in the top left are built up by suit from Ace to King.</p>
+                <h3>Free Cells</h3>
+                <p>The four cells in the top right can each hold any one card temporarily.</p>
+                <h3>Tableau</h3>
+                <p>Cards placed on a column must be one rank lower and opposite in color to the card they're placed on.</p>
+                <h3>Moves</h3>
+                <p>You move cards one at a time. You may move a sequence of cards if you have enough free cells and empty columns.</p>
+            `,
+            onNewGame: () => {
+                this.stats.recordAbandoned();
+                this.resetGame();
+            },
+            onRestart: () => {
+                this.stats.recordAbandoned();
+                this.restartGame();
+            },
+        });
+
+        // ─── Shared: Drag handler ────────────────────────────────────────────
+        this.dragHandler = new DragHandler({
+            getCardFromElement: el => el?.cardRef || null,
+            getPileForElement:  el => this.getPileForElement(el),
+            canPickUp: (card, stack) => {
+                // Keep game state in sync so preMoveCheckFailed() can read it
+                this.draggedCard  = card;
+                this.draggedStack = stack;
+                return !this.preMoveCheckFailed();
+            },
+            findBestTarget: () => this.findBestTarget(),
+            onDrop:   (targetEl, isDrag) => this.attemptMove(targetEl, isDrag),
+            onResize: () => this.layout.adjust(),
+        });
+
+        // ─── Init ────────────────────────────────────────────────────────────
+        this.settings.apply();
         this.addEventListeners();
-        this.applySettings();
+        this.init();
     }
 
-    // ─── Settings Persistence ─────────────────────────────────────────────────────
-
-    defaultSettings() {
-        return {
-            showScore:      true,
-            showMoves:      true,
-            showTime:       true,
-            autoMove:       true,
-            showNumberBar:  true,
-            showGrouping:   true,
-            darkMode:       false,
-        };
-    }
-
-    loadSettings() {
-        try {
-            const saved = localStorage.getItem('freecell-settings');
-            return saved ? { ...this.defaultSettings(), ...JSON.parse(saved) } : this.defaultSettings();
-        } catch {
-            return this.defaultSettings();
-        }
-    }
-
-    saveSettings() {
-        try {
-            localStorage.setItem('freecell-settings', JSON.stringify(this.settings));
-        } catch {}
-    }
-
-    // Apply all settings to the DOM (called on load and whenever a setting changes)
-    applySettings() {
-        document.body.classList.toggle('dark-mode',       this.settings.darkMode);
-        document.body.classList.toggle('hide-number-bar', !this.settings.showNumberBar);
-        document.body.classList.toggle('hide-score',      !this.settings.showScore);
-        document.body.classList.toggle('hide-moves',      !this.settings.showMoves);
-        document.body.classList.toggle('hide-time',       !this.settings.showTime);
-        this.updateSequenceOutlines();
-    }
-
-    // ─── Statistics Persistence ───────────────────────────────────────────────────
-
-    defaultStats() {
-        return {
-            gamesPlayed:   0,
-            gamesWon:      0,
-            bestMoves:     null,  // null = no win yet
-            bestTime:      null,  // seconds
-            bestScore:     null,
-            currentStreak: 0,
-            bestStreak:    0,
-            totalMoves:    0,
-            totalTime:     0,
-            totalScore:    0,
-        };
-    }
-
-    loadStats() {
-        try {
-            const saved = localStorage.getItem('freecell-stats');
-            return saved ? { ...this.defaultStats(), ...JSON.parse(saved) } : this.defaultStats();
-        } catch {
-            return this.defaultStats();
-        }
-    }
-
-    saveStats() {
-        try {
-            localStorage.setItem('freecell-stats', JSON.stringify(this.stats));
-        } catch {}
-    }
-
-    recordGameStart() {
-        this.gameStartTime = Date.now();
-        this.moveCount     = 0;
-        this.gameActive    = true;
-        this.stats.gamesPlayed++;
-        this.saveStats();
-
-        // Clear any existing timer before starting a new one
-        clearInterval(this.timerInterval);
-        this.timerInterval = setInterval(() => {
-            const elapsed = Math.floor((Date.now() - this.gameStartTime) / 1000);
-            document.getElementById('timer').textContent = `Time: ${this.formatTime(elapsed)}`;
-        }, 1000);
-    }
-
-    recordGameWin() {
-        if (!this.gameActive) return;
-        this.gameActive = false;
-
-        const timeSecs = Math.floor((Date.now() - this.gameStartTime) / 1000);
-        clearInterval(this.timerInterval);
-
-        const finalScore = 520 - this.moveCount; //TODO have scoring function for here and UI.
-
-        this.stats.gamesWon++;
-        this.stats.currentStreak++;
-        this.stats.bestStreak  = Math.max(this.stats.bestStreak, this.stats.currentStreak);
-        this.stats.bestMoves   = this.stats.bestMoves === null ? this.moveCount  : Math.min(this.stats.bestMoves,  this.moveCount);
-        this.stats.bestTime    = this.stats.bestTime  === null ? timeSecs        : Math.min(this.stats.bestTime,   timeSecs);
-        this.stats.bestScore   = this.stats.bestScore  === null ? finalScore      : Math.max(this.stats.bestScore,  finalScore);
-        this.stats.totalMoves += this.moveCount;
-        this.stats.totalTime  += timeSecs;
-        this.stats.totalScore += finalScore;
-
-        this.saveStats();
-    }
-
-    recordGameAbandoned() {
-        if (!this.gameActive) return;
-        this.gameActive = false;
-        clearInterval(this.timerInterval);
-        this.stats.currentStreak = 0;
-        this.saveStats();
-    }
-
-    // ─── Init ─────────────────────────────────────────────────────────────────────
+    // ─── Init ─────────────────────────────────────────────────────────────────
 
     init() {
-        document.getElementById('win-message').style.display = 'none';
-        document.getElementById('win-stats').style.display          = 'none';
-        document.getElementById('middle-btn-new-game').style.display = 'none';
+        document.getElementById('win-message').style.display          = 'none';
+        document.getElementById('win-stats').style.display            = 'none';
+        document.getElementById('middle-btn-new-game').style.display  = 'none';
         this.updateMovesAndScore();
         this.createDeck();
         this.shuffleDeck();
         this.dealCards();
-        this.renderDOM();    // initial render without auto-move
-        this.runAutoMoves(); // then run auto-moves (no animations on deal)
+        this.renderDOM();
+        this.runAutoMoves();
         this.registerServiceWorker();
-        this.recordGameStart();
+        this.stats.recordStart();
+        this.timer.start();
     }
 
-    // Push new Card instances into this.deck for all 52 standard cards.
-    // Also populates cardMap for permanent id → Card lookup.
+    // ─── Deck ─────────────────────────────────────────────────────────────────
+
     createDeck() {
-        const suits = ['hearts', 'diamonds', 'clubs', 'spades'];
-        const ranks = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
-        for (let suit of suits) {
-            for (let rank of ranks) {
+        for (const suit of Card.SUITS) {
+            for (const rank of Card.RANKS) {
                 const card = new Card(suit, rank);
                 this.deck.push(card);
-                this.cardMap[card.id] = card; // permanent reference, survives deck being cleared
+                this.cardMap[card.id] = card;
             }
         }
     }
@@ -237,7 +175,6 @@ class FreecellGame {
         }
     }
 
-    // Pop cards off the shuffled deck into tableau columns
     dealCards() {
         for (let col = 0; col < 8; col++) {
             const numCards = col < 4 ? 7 : 6;
@@ -245,15 +182,13 @@ class FreecellGame {
                 this.tableau[col].push(this.deck.pop());
             }
         }
-        this.deck = []; // clear remaining references
+        this.deck = [];
     }
 
-    // ─── Rendering ───────────────────────────────────────────────────────────────
+    // ─── Rendering ────────────────────────────────────────────────────────────
 
-    // Pure DOM sync: reads model arrays and updates the DOM to match.
-    // Does NOT trigger auto-moves. Use render() for normal gameplay.
+    // Pure DOM sync — does not trigger auto-moves.
     renderDOM() {
-        // Free cells
         for (let i = 0; i < 4; i++) {
             const cell = document.getElementById(`free${i + 1}`);
             cell.innerHTML = '';
@@ -273,117 +208,31 @@ class FreecellGame {
         this.updateSequenceOutlines();
         requestAnimationFrame(() => {
             requestAnimationFrame(() => {
-                this.adjustColumnSpacing();
+                this.layout.adjust();
             });
         });
     }
 
     // Full render: syncs DOM then runs animated auto-moves.
-    // Use this after every player move.
     render() {
         this.renderDOM();
         this.runAutoMoves();
     }
 
-    // ─── Column Compression ───────────────────────────────────────────────────────
+    // ─── Animation ────────────────────────────────────────────────────────────
 
-    adjustColumnSpacing() {
-        const tableauEl     = document.getElementById('tableau');
-        const tableauHeight = tableauEl.getBoundingClientRect().height;
-
-        for (let i = 0; i < 8; i++) {
-            const colEl = document.getElementById(`col${i + 1}`);
-            const cards = colEl.querySelectorAll('.card');
-
-            if (cards.length <= 1) {
-                colEl.style.removeProperty('--card-offset');
-                continue;
-            }
-
-            const firstCard   = cards[0];
-            const cardHeight  = firstCard.getBoundingClientRect().height;
-            const cardWidth       = firstCard.getBoundingClientRect().width;
-            const defaultMargin = -90;
-            const defaultOverlap = defaultMargin * cardWidth * -.01;
-            const defaultPeak = cardHeight - defaultOverlap;
-            const defaultBottom = cardHeight + (cards.length - 1) * defaultPeak;
-
-            if (defaultBottom < tableauHeight) {
-                colEl.style.removeProperty('--card-offset'); // default fits, reset to default
-                continue;
-            }
-
-            const availableHeight = tableauHeight - cardHeight; // space for overlapping cards
-            const numOverlapping  = cards.length - 1;
-            const desiredPeakPx = (availableHeight / numOverlapping);
-            const desiredOverlapPx = cardHeight - desiredPeakPx;
-            const newMarginTop = (desiredOverlapPx/cardWidth) * -100;
-            colEl.style.setProperty('--card-offset', `${newMarginTop.toFixed(1)}%`);
-        }
-    }
-
-    // ─── Animation ───────────────────────────────────────────────────────────────
-
-    // FLIP animation: animates cardEls from fromRects to their current DOM positions.
-    // fromRects: array of DOMRect captured BEFORE renderDOM() was called.
-    // cardEls:   the corresponding card elements.
     animateCards(cardEls, fromRects) {
-        const toRects = cardEls.map(el => el.getBoundingClientRect());
-
-        // Collect all destination parents so we can set z-index on their entire contents
-        const affectedParents = new Set(cardEls.map(el => el.parentElement).filter(Boolean));
-
-        // Set z-index on every card in every affected column, not just the moving ones.
-        // This ensures cards already in the destination don't float above the arriving card.
-        affectedParents.forEach(parent => {
-            Array.from(parent.children).forEach((el, i) => {
-                el.style.zIndex = 100 + i;
-            });
-        });
-
-        cardEls.forEach((el, i) => {
-            const dx = fromRects[i].left - toRects[i].left;
-            const dy = fromRects[i].top  - toRects[i].top;
-            // Skip animation if card didn't actually move (e.g. invalid move snapped back)
-            if (dx === 0 && dy === 0) return;
-            el.style.transition = 'none';
-            el.style.transform  = `translate(${dx}px, ${dy}px)`;
-        });
-
-        // Double rAF: first frame paints the inverted position, second triggers the transition
-        requestAnimationFrame(() => {
-            requestAnimationFrame(() => {
-                cardEls.forEach(el => {
-                    el.style.transition = 'transform 0.3s ease';
-                    el.style.transform  = '';
-                    el.addEventListener('transitionend', () => {
-                        el.style.transition = '';
-                    }, { once: true });
-                });
-
-                // Clear all z-index overrides after the animation completes.
-                // Use the duration + a small buffer to ensure all transitions are done.
-                setTimeout(() => {
-                    affectedParents.forEach(parent => {
-                        Array.from(parent.children).forEach(el => {
-                            el.style.zIndex = '';
-                        });
-                    });
-                }, 350); // slightly longer than the 0.3s transition
-            });
-        });
+        CardAnimator.animateCards(cardEls, fromRects);
     }
 
-    // ─── History / Undo ──────────────────────────────────────────────────────────
+    // ─── History / Undo ───────────────────────────────────────────────────────
 
-    // Snapshot the current state before a player move.
-    // movedIds records which cards are about to move, for use by undo animation.
     saveHistory() {
         this.history.push({
             freeCells:   this.freeCells.map(cell => [...cell]),
             foundations: this.foundations.map(f    => [...f]),
             tableau:     this.tableau.map(col      => [...col]),
-            movedIds:    this.draggedStack.map(c   => c.id)
+            movedIds:    this.draggedStack.map(c   => c.id),
         });
 
         // 5000 entries ≈ ~5MB max. Far exceeds any realistic game length (52 cards),
@@ -410,7 +259,7 @@ class FreecellGame {
         // Animate both the manually moved cards and any auto-moved cards
         const allMovedIds = [...new Set([...entry.movedIds, ...autoMovedIds])];
         const cardEls     = allMovedIds.map(id => this.cardMap[id].element);
-        const fromRects   = cardEls.map(el => el.getBoundingClientRect()); // current = "from" for undo
+        const fromRects   = cardEls.map(el => el.getBoundingClientRect());
 
         // Restore model
         this.freeCells   = entry.freeCells;
@@ -419,406 +268,20 @@ class FreecellGame {
 
         // Sync DOM to restored state WITHOUT triggering new auto-moves
         this.renderDOM();
-
-        // Animate cards back to their restored positions
-        this.animateCards(cardEls, fromRects);
+        CardAnimator.animateCards(cardEls, fromRects);
     }
 
-    // ─── Settings Popup ───────────────────────────────────────────────────────────
-
-    openSettings() {
-        // Remove any existing popup first
-        this.closeSettings();
-
-        const overlay = document.createElement('div');
-        overlay.className = 'settings-overlay';
-        overlay.id = 'settings-overlay';
-
-        overlay.innerHTML = `
-            <div class="settings-popup" id="settings-popup">
-
-                <div class="settings-screen active" id="settings-main">
-                    <div class="settings-header">
-                        <span class="settings-title">Menu</span>
-                        <button class="settings-close" id="settings-close">✕</button>
-                    </div>
-
-                    <div class="settings-actions">
-                        <button class="settings-action-btn" id="btn-new-game">
-                            <span class="action-icon">➕</span>
-                            <span>New Game</span>
-                        </button>
-                        <button class="settings-action-btn" id="btn-restart">
-                            <span class="action-icon">⏮</span>
-                            <span>Restart Game</span>
-                        </button>
-                        <button class="settings-action-btn" id="btn-stats">
-                            <span class="action-icon">📊</span>
-                            <span>Statistics</span>
-                            <span class="action-chevron">›</span>
-                        </button>
-                        <button class="settings-action-btn" id="btn-rules">
-                            <span class="action-icon">📖</span>
-                            <span>Rules</span>
-                            <span class="action-chevron">›</span>
-                        </button>
-                        <button class="settings-action-btn" id="btn-share">
-                            <span class="action-icon">🔗</span>
-                            <span>Share & Install</span>
-                            <span class="action-chevron">›</span>
-                        </button>
-                    </div>
-
-                    <div class="settings-divider"></div>
-
-                    <div class="settings-toggles">
-                        <label class="settings-toggle-row">
-                            <span class="toggle-label">Show Score</span>
-                            <div class="toggle-switch ${this.settings.showScore ? 'on' : ''}" data-setting="showScore"></div>
-                        </label>
-                        <label class="settings-toggle-row">
-                            <span class="toggle-label">Show Moves</span>
-                            <div class="toggle-switch ${this.settings.showMoves ? 'on' : ''}" data-setting="showMoves"></div>
-                        </label>
-                        <label class="settings-toggle-row">
-                            <span class="toggle-label">Show Timer</span>
-                            <div class="toggle-switch ${this.settings.showTime ? 'on' : ''}" data-setting="showTime"></div>
-                        </label>
-                        <label class="settings-toggle-row">
-                            <span class="toggle-label">Auto-move to Foundation</span>
-                            <div class="toggle-switch ${this.settings.autoMove ? 'on' : ''}" data-setting="autoMove"></div>
-                        </label>
-                        <label class="settings-toggle-row">
-                            <span class="toggle-label">Show Number Bar</span>
-                            <div class="toggle-switch ${this.settings.showNumberBar ? 'on' : ''}" data-setting="showNumberBar"></div>
-                        </label>
-                        <label class="settings-toggle-row">
-                            <span class="toggle-label">Highlight Grouped Cards</span>
-                            <div class="toggle-switch ${this.settings.showGrouping ? 'on' : ''}" data-setting="showGrouping"></div>
-                        </label>
-                        <label class="settings-toggle-row">
-                            <span class="toggle-label">Dark Mode</span>
-                            <div class="toggle-switch ${this.settings.darkMode ? 'on' : ''}" data-setting="darkMode"></div>
-                        </label>
-                    </div>
-
-                    <div class="settings-version">v${VERSION}</div>
-                </div>
-
-                <div class="settings-screen" id="settings-stats">
-                    <div class="settings-header">
-                        <button class="settings-back" id="stats-back">‹</button>
-                        <span class="settings-title">Statistics</span>
-                        <div style="width:2em"></div>
-                    </div>
-
-                    <div class="stats-grid">
-                        
-                        <div class="stat-cell">
-                            <div class="stat-value">${this.stats.gamesWon}</div>
-                            <div class="stat-label">Won</div>
-                        </div>
-                        <div class="stat-cell">
-                            <div class="stat-value">${this.stats.gamesPlayed > 0 ? Math.round((this.stats.gamesWon / this.stats.gamesPlayed) * 100) : 0}%</div>
-                            <div class="stat-label">Win Rate</div>
-                        </div>
-                        <div class="stat-cell">
-                            <div class="stat-value">${this.stats.gamesPlayed}</div>
-                            <div class="stat-label">Total Played</div>
-                        </div>
-
-                        <div class="stat-cell">
-                            <div class="stat-value">${this.stats.bestMoves ?? '—'}</div>
-                            <div class="stat-label">Best Moves</div>
-                        </div>
-                        <div class="stat-cell">
-                            <div class="stat-value">${this.stats.gamesWon > 0 ? Math.round(this.stats.totalMoves / this.stats.gamesWon) : '—'}</div>
-                            <div class="stat-label">Avg Moves</div>
-                        </div>
-                        <div class="stat-cell">
-                            <div class="stat-value">${this.stats.totalMoves}</div>
-                            <div class="stat-label">Total Moves</div>
-                        </div>
-
-                        <div class="stat-cell">
-                            <div class="stat-value">${this.stats.bestTime ? this.formatTime(this.stats.bestTime) : '—'}</div>
-                            <div class="stat-label">Best Time</div>
-                        </div>
-                        <div class="stat-cell">
-                            <div class="stat-value">${this.stats.gamesWon > 0 ? this.formatTime(Math.round(this.stats.totalTime / this.stats.gamesWon)) : '—'}</div>
-                            <div class="stat-label">Avg Time</div>
-                        </div>
-                        <div class="stat-cell">
-                            <div class="stat-value">${this.formatTime(this.stats.totalTime)}</div>
-                            <div class="stat-label">Total Time</div>
-                        </div>
-
-                        <div class="stat-cell">
-                            <div class="stat-value">${this.stats.bestScore ?? '—'}</div>
-                            <div class="stat-label">Best Score</div>
-                        </div>
-                        <div class="stat-cell">
-                            <div class="stat-value">${this.stats.gamesWon > 0 ? Math.round(this.stats.totalScore / this.stats.gamesWon) : '—'}</div>
-                            <div class="stat-label">Avg Score</div>
-                        </div>
-                        <div class="stat-cell">
-                            <div class="stat-value">${this.stats.totalScore}</div>
-                            <div class="stat-label">Total Score</div>
-                        </div>
-
-                        <div class="stat-cell">
-                            <div class="stat-value">${this.stats.bestStreak}</div>
-                            <div class="stat-label">Best Streak</div>
-                        </div>
-                        <div class="stat-cell">
-                            <div class="stat-value">${this.stats.currentStreak}</div>
-                            <div class="stat-label">Current Streak</div>
-                        </div>
-                    </div>
-                    <div class="settings-divider"></div>
-
-                    <button class="settings-danger-btn" id="btn-reset-stats">Reset Statistics</button>
-                    <button class="settings-action-btn" id="btn-edit-stats">
-                        <span class="action-icon">✏️</span>
-                        <span>Edit Statistics</span>
-                        <span class="action-chevron">›</span>
-                    </button>
-                </div>
-
-                <div class="settings-screen" id="settings-edit-stats">
-                    <div class="settings-header">
-                        <button class="settings-back" id="edit-stats-back">‹</button>
-                        <span class="settings-title">Edit Statistics</span>
-                        <div style="width:2em"></div>
-                    </div>
-                    <div class="settings-text-body">
-                        <p>Enter your stats from another Freecell game to import them here.</p>
-                    </div>
-                    <div class="stats-edit-grid">
-                        ${[
-                            ['gamesPlayed', 'Games Played'],
-                            ['gamesWon',    'Games Won'],
-                            ['bestMoves',   'Best Moves'],
-                            ['totalMoves',  'Total Moves'],
-                            ['bestTime',    'Best Time'],
-                            ['totalTime',   'Total Time'],
-                            ['bestScore',   'Best Score'],
-                            ['totalScore',  'Total Score'],
-                            ['bestStreak',  'Best Streak'],
-                            ['currentStreak','Current Streak'],
-                        ].map(([key, label]) => {
-                            const isTime = key === 'bestTime' || key === 'totalTime';
-                            const value  = isTime ? this.secsToHMS(this.stats[key] ?? 0) : (this.stats[key] ?? 0);
-                            const type   = isTime ? 'text' : 'number';
-                            const placeholder = isTime ? 'h:mm:ss' : '';
-                            return `
-                                <div class="stats-edit-row">
-                                    <label class="stats-edit-label">${label}</label>
-                                    <input class="stats-edit-input" type="${type}" data-stat="${key}" 
-                                        data-is-time="${isTime}" value="${value}" placeholder="${placeholder}">
-                                </div>
-                            `;
-                        }).join('')}
-                    </div>
-                    <button class="settings-action-btn" id="btn-save-stats" style="margin: 8px 16px; width: calc(100% - 32px);">
-                        <span class="action-icon">💾</span>
-                        <span>Save</span>
-                    </button>
-                </div>
-
-                <div class="settings-screen" id="settings-rules">
-                    <div class="settings-header">
-                        <button class="settings-back" id="rules-back">‹</button>
-                        <span class="settings-title">Rules</span>
-                        <div style="width:2em"></div>
-                    </div>
-                    <div class="settings-text-body">
-                        <h3>Objective</h3>
-                        <p>Move all 52 cards to the four foundation piles. The game is won when all cards are on the foundations.</p>
-                        <h3>Foundations</h3>
-                        <p>The four foundation piles in the top left are built up by suit from Ace to King.</p>
-                        <h3>Free Cells</h3>
-                        <p>The four cells in the top right can each hold any one card temporarily.</p>
-                        <h3>Tableau</h3>
-                        <p>Cards placed on a column must be one rank lower and opposite in color to the card they're placed on.</p>
-                        <h3>Moves</h3>
-                        <p>You move cards one at a time. You may move a sequence of cards if you have enough free cells and empty columns.</p>
-                    </div>
-                </div>
-
-                <div class="settings-screen" id="settings-share">
-                    <div class="settings-header">
-                        <button class="settings-back" id="share-back">‹</button>
-                        <span class="settings-title">Share & Install</span>
-                        <div style="width:2em"></div>
-                    </div>
-                    <div class="settings-text-body">
-                        <h3>1. Discover in Browser</h3>
-                        <p>Share this URL with anyone:</p>
-                        <div class="share-url">${window.location.origin}</div>
-                        <div id="qr-code"></div>
-                        <h3>2. Add to Home Screen</h3>
-                        <p><strong>iPhone / iPad:</strong> Tap the Share button (□↑) in Safari, then tap <em>Add to Home Screen</em>.</p>
-                        <p><strong>Android:</strong> Tap the menu (⋮) in Chrome, then tap <em>Add to Home Screen</em>.</p>
-                        <p><strong>Desktop:</strong> Click the install icon (⊕) in the address bar in Chrome or Edge.</p>
-                    </div>
-                </div>
-
-            </div>
-        `;
-
-        document.body.appendChild(overlay);
-
-        // Animate in
-        requestAnimationFrame(() => overlay.classList.add('visible'));
-
-        // Wire up events inside the popup
-        overlay.addEventListener('click', (e) => {
-            if (e.target === overlay) this.closeSettings(); // click backdrop to close
-        });
-
-        document.getElementById('settings-close').addEventListener('click', () => this.closeSettings());
-
-        document.getElementById('btn-new-game').addEventListener('click', () => {
-            this.closeSettings();
-            this.recordGameAbandoned();
-            this.resetGame();
-        });
-
-        document.getElementById('btn-restart').addEventListener('click', () => {
-            this.closeSettings();
-            this.recordGameAbandoned();
-            this.restartGame();
-        });
-
-        document.getElementById('btn-stats').addEventListener('click', () => {
-            this.showSettingsScreen('settings-stats');
-        });
-
-        document.getElementById('stats-back').addEventListener('click', () => {
-            this.showSettingsScreen('settings-main');
-        });
-
-        document.getElementById('btn-reset-stats').addEventListener('click', () => {
-            if (confirm('Reset all statistics?')) {
-                this.stats = this.defaultStats();
-                this.saveStats();
-                this.closeSettings();
-                this.openSettings(); // reopen to refresh displayed values
-            }
-        });
-
-        document.getElementById('btn-edit-stats').addEventListener('click', () => {
-            this.showSettingsScreen('settings-edit-stats');
-        });
-        document.getElementById('edit-stats-back').addEventListener('click', () => {
-            this.showSettingsScreen('settings-stats');
-        });
-        document.getElementById('btn-save-stats').addEventListener('click', () => {
-            const inputs = document.querySelectorAll('.stats-edit-input');
-            inputs.forEach(input => {
-                const key    = input.dataset.stat;
-                const isTime = input.dataset.isTime === 'true';
-                const val    = isTime ? this.HMSToSecs(input.value) : parseInt(input.value, 10);
-                if (val !== null && !isNaN(val) && val >= 0) this.stats[key] = val;
-            });
-            this.saveStats();
-            this.showSettingsScreen('settings-stats');
-            this.closeSettings();
-            this.openSettings(); // refresh displayed values
-        });
-
-        document.getElementById('btn-rules').addEventListener('click', () => {
-            this.showSettingsScreen('settings-rules');
-        });
-        document.getElementById('rules-back').addEventListener('click', () => {
-            this.showSettingsScreen('settings-main');
-        });
-
-        document.getElementById('btn-share').addEventListener('click', () => {
-            this.showSettingsScreen('settings-share');
-            this.renderQRCode();
-        });
-        document.getElementById('share-back').addEventListener('click', () => {
-            this.showSettingsScreen('settings-main');
-        });
-
-        // Toggle switches
-        overlay.querySelectorAll('.toggle-switch').forEach(toggle => {
-            toggle.addEventListener('click', () => {
-                const setting = toggle.dataset.setting;
-                this.settings[setting] = !this.settings[setting];
-                toggle.classList.toggle('on', this.settings[setting]);
-                this.saveSettings();
-                this.applySettings();
-            });
-        });
-    }
-
-    showSettingsScreen(screenId) {
-        document.querySelectorAll('.settings-screen').forEach(s => s.classList.remove('active'));
-        document.getElementById(screenId).classList.add('active');
-    }
-
-    closeSettings() {
-        const overlay = document.getElementById('settings-overlay');
-        if (!overlay) return;
-        overlay.classList.remove('visible');
-        overlay.addEventListener('transitionend', () => overlay.remove(), { once: true });
-    }
-
-    renderQRCode() {
-        const el = document.getElementById('qr-code');
-        if (!el || el.childElementCount > 0) return; // only render once
-        new QRCode(el, {
-            text: window.location.origin,
-            width: 160,
-            height: 160,
-        });
-    }
-
-    formatTime(seconds) {
-        const m = Math.floor(seconds / 60);
-        const s = seconds % 60;
-        return `${m}:${s.toString().padStart(2, '0')}`;
-    }
-
-    secsToHMS(totalSecs) {
-        const h = Math.floor(totalSecs / 3600);
-        const m = Math.floor((totalSecs % 3600) / 60);
-        const s = totalSecs % 60;
-        return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-    }
-
-    HMSToSecs(str) {
-        const parts = str.split(':').map(p => parseInt(p, 10));
-        if (parts.some(isNaN)) return null;
-        if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
-        if (parts.length === 2) return parts[0] * 60 + parts[1]; // also accept mm:ss
-        if (parts.length === 1) return parts[0];                  // also accept raw seconds
-        return null;
-    }
-
-    // ─── Event Listeners ─────────────────────────────────────────────────────────
+    // ─── Event Listeners ──────────────────────────────────────────────────────
 
     addEventListeners() {
-        // Touch events for iOS (pointer events unreliable on iOS)
-        document.addEventListener('touchstart', this.handleTouchStart.bind(this), { passive: false });
-        document.addEventListener('touchmove',  this.handleTouchMove.bind(this),  { passive: false });
-        document.addEventListener('touchend',   this.handleTouchEnd.bind(this),   { passive: false });
+        this.dragHandler.attach();
 
-        // Pointer events for mouse on desktop — skip if touch already handled it
-        document.addEventListener('pointerdown',   this.handlePointerDown.bind(this));
-        document.addEventListener('pointermove',   this.handlePointerMove.bind(this));
-        document.addEventListener('pointerup',     this.handlePointerUp.bind(this));
-        document.addEventListener('pointercancel', this.handlePointerUp.bind(this));
-
-        document.addEventListener('click', (e) => {
+        document.addEventListener('click', e => {
             const button = e.target.closest('.top-button');
             if (!button) return;
             switch (button.dataset.action) {
-                case 'undo':     this.undo();         break;
-                case 'settings': this.openSettings(); break;
+                case 'undo':     this.undo();             break;
+                case 'settings': this.settingsUI.open();  break;
             }
         });
 
@@ -829,7 +292,7 @@ class FreecellGame {
         // Number bar highlight
         const numBar = document.querySelector('.number-bar');
 
-        numBar.addEventListener('touchstart', (e) => {
+        numBar.addEventListener('touchstart', e => {
             const num = e.target.closest('.num');
             if (!num) return;
             e.preventDefault(); // prevent the touch from also firing a click
@@ -838,41 +301,27 @@ class FreecellGame {
 
         numBar.addEventListener('touchend', () => this.clearHighlight());
 
-        numBar.addEventListener('pointerdown', (e) => {
+        numBar.addEventListener('pointerdown', e => {
             if (e.pointerType === 'touch') return;
             const num = e.target.closest('.num');
             if (!num) return;
             this.highlightCards(num.dataset.value);
         });
 
-        numBar.addEventListener('pointerup',    (e) => { if (e.pointerType !== 'touch') this.clearHighlight(); });
-        
-        // Safety net: if the pointer leaves the number bar entirely, clear the highlight
-        numBar.addEventListener('pointerleave', (e) => { if (e.pointerType !== 'touch') this.clearHighlight(); });
-
-        // redo column spacing on orientation change and viewport size changes
-        window.addEventListener('resize', () => {
-            requestAnimationFrame(() => {
-                requestAnimationFrame(() => {
-                    this.adjustColumnSpacing();
-                });
-            });
-        });
+        numBar.addEventListener('pointerup',    e => { if (e.pointerType !== 'touch') this.clearHighlight(); });
+        numBar.addEventListener('pointerleave', e => { if (e.pointerType !== 'touch') this.clearHighlight(); });
     }
 
-    // ─── Card Highlight ───────────────────────────────────────────────────────────
+    // ─── Card Highlight ───────────────────────────────────────────────────────
 
     highlightCards(value) {
-        // Build a set of card IDs to highlight before touching the DOM
         const toHighlight = new Set();
 
-        if (['hearts', 'diamonds', 'clubs', 'spades'].includes(value)) {
-            // Find how many of this suit are already in the foundation
+        if (Card.SUITS.includes(value)) {
             const foundationPile  = this.foundations.find(f => f.length > 0 && f[0].suit === value);
             const foundationCount = foundationPile ? foundationPile.length : 0;
-
-            // The next 3 ranks above what's already in the foundation, with a max of King (13)
-            const nextValues      = [foundationCount + 1, foundationCount + 2, foundationCount + 3].filter(v => v <= 13);
+            const nextValues      = [foundationCount + 1, foundationCount + 2, foundationCount + 3]
+                .filter(v => v <= 13);
             nextValues.forEach(v => {
                 const card = Object.values(this.cardMap).find(c => c.suit === value && c.value === v);
                 if (card) toHighlight.add(card.id);
@@ -880,9 +329,9 @@ class FreecellGame {
         }
 
         document.querySelectorAll('.card').forEach(el => {
-            const card = this.getCardFromElement(el);
+            const card = el?.cardRef || null;
             if (!card) return;
-            const matches = ['hearts', 'diamonds', 'clubs', 'spades'].includes(value)
+            const matches = Card.SUITS.includes(value)
                 ? toHighlight.has(card.id)
                 : card.rank === value;
             el.classList.toggle('highlighted', matches);
@@ -894,12 +343,13 @@ class FreecellGame {
         document.querySelectorAll('.card').forEach(el => el.classList.remove('highlighted', 'dimmed'));
     }
 
+    // ─── Sequence outlines (Freecell-specific) ────────────────────────────────
+
     updateSequenceOutlines() {
-        // Clear all existing sequence classes
         document.querySelectorAll('.card.seq-top, .card.seq-mid, .card.seq-bot, .card.seq-solo')
             .forEach(el => el.classList.remove('seq-top', 'seq-mid', 'seq-bot', 'seq-solo'));
 
-        if (!this.settings.showGrouping) return;
+        if (!this.settings.get('showGrouping')) return;
 
         for (let i = 0; i < 8; i++) {
             const col = this.tableau[i];
@@ -924,21 +374,17 @@ class FreecellGame {
                 const isEnd   = breaksBefore.has(j + 1) || j === col.length - 1;
 
                 let cls;
-                if      ( isStart &&  isEnd) cls = null; // sequence of length 1
+                if      ( isStart &&  isEnd) cls = null;
                 else if ( isStart && !isEnd) cls = 'seq-top';
                 else if (!isStart &&  isEnd) cls = 'seq-bot';
                 else                         cls = 'seq-mid';
 
-                col[j].element.classList.add(cls);
+                if (cls) col[j].element.classList.add(cls);
             }
         }
     }
 
-    // ─── Helpers ─────────────────────────────────────────────────────────────────
-
-    getCardFromElement(el) {
-        return el?.cardRef || null;
-    }
+    // ─── Helpers ──────────────────────────────────────────────────────────────
 
     // Returns { type, index, arr } for a pile container element.
     // Reads data-pile-type and data-pile-index attributes set in HTML.
@@ -956,191 +402,8 @@ class FreecellGame {
         }
     }
 
-    // ─── Touch Handlers ──────────────────────────────────────────────────────────
+    // ─── Move Logic ───────────────────────────────────────────────────────────
 
-    handleTouchStart(e) {
-        const touch    = e.touches[0];
-        this.touchStartX = touch.clientX;
-        this.touchStartY = touch.clientY;
-        this.dragNotTap  = false;
-
-        const targetEl = document.elementFromPoint(touch.clientX, touch.clientY)?.closest('.card');
-        if (!targetEl) return;
-
-        const card = this.getCardFromElement(targetEl);
-        if (!card) return;
-
-        this.draggedCard = card;
-
-        const pile = this.getPileForElement(targetEl.parentElement);
-        if (!pile) return;
-
-        const idx = pile.arr.indexOf(card); // Find the position of the touched card
-        this.draggedStack = pile.arr.slice(idx); //cards from here to end - shallow copy — card refs, not clones
-
-        if (this.preMoveCheckFailed()) { //trapped or too few empty cells
-            this.draggedCard  = null;
-            this.draggedStack = [];
-            return;
-        }
-
-        // 1. Capture natural positions BEFORE adding .dragging
-        this._dragStartRects = this.draggedStack.map(c => c.element.getBoundingClientRect());
-
-        // 2. Add class AND immediately pin each card to its captured position
-        this.draggedStack.forEach((c, i) => {
-            const r = this._dragStartRects[i];
-            c.element.style.left  = `${r.left}px`;
-            c.element.style.top   = `${r.top}px`;
-            c.element.style.width = `${r.width}px`;
-            c.element.classList.add('dragging');
-        });
-    }
-
-    handleTouchMove(e) {
-        e.preventDefault();
-        if (!this.draggedCard) return;
-
-        const touch  = e.touches[0];
-        const deltaX = touch.clientX - this.touchStartX;
-        const deltaY = touch.clientY - this.touchStartY;
-
-        if (!this.dragNotTap && (Math.abs(deltaX) > this.tapThreshold || Math.abs(deltaY) > this.tapThreshold)) {
-            this.dragNotTap = true;
-        }
-
-        /*this.draggedStack.forEach(c => {
-            c.element.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
-        });*/
-
-        this.draggedStack.forEach((c, i) => {
-            const origin = this._dragStartRects[i];
-            c.element.style.left  = `${origin.left + deltaX}px`;
-            c.element.style.top   = `${origin.top  + deltaY}px`;
-            c.element.style.width = `${origin.width}px`;
-        });
-    }
-
-    handleTouchEnd(e) {
-        if (!this.draggedCard) return;
-
-        this.draggedStack.forEach(c => {
-            c.element.classList.remove('dragging');
-            c.element.style.transform = '';
-            c.element.style.left  = '';
-            c.element.style.top   = '';
-            c.element.style.width = '';
-        });
-
-        if (this.dragNotTap) {
-            const touch    = e.changedTouches[0];
-            const targetEl = document.elementFromPoint(touch.clientX, touch.clientY);
-            this.attemptMove(targetEl, true);  // drag — no tap animation
-        } else {
-            this.attemptMove(this.findBestTarget(), false); // tap — animate the move
-        }
-
-        this.draggedCard  = null;
-        this.draggedStack = [];
-    }
-
-    // ─── Pointer Handlers (mouse / stylus) ───────────────────────────────────────
-
-    handlePointerDown(e) {
-        if (e.pointerType === 'touch') return; // already handled by touch events
-        if (e.isPrimary === false)     return;
-        e.preventDefault();
-
-        this.touchStartX = e.clientX;
-        this.touchStartY = e.clientY;
-        this.dragNotTap  = false;
-
-        const targetEl = document.elementFromPoint(e.clientX, e.clientY)?.closest('.card');
-        if (!targetEl) return;
-
-        const card = this.getCardFromElement(targetEl);
-        if (!card) return;
-
-        this.draggedCard = card;
-
-        const pile = this.getPileForElement(targetEl.parentElement);
-        if (!pile) return;
-
-        const idx = pile.arr.indexOf(card);
-        this.draggedStack = pile.arr.slice(idx);
-
-        if (this.preMoveCheckFailed()) {
-            this.draggedCard  = null;
-            this.draggedStack = [];
-            return;
-        }
-
-        // 1. Capture natural positions BEFORE adding .dragging
-        this._dragStartRects = this.draggedStack.map(c => c.element.getBoundingClientRect());
-
-        // 2. Add class AND immediately pin each card to its captured position
-        this.draggedStack.forEach((c, i) => {
-            const r = this._dragStartRects[i];
-            c.element.style.left  = `${r.left}px`;
-            c.element.style.top   = `${r.top}px`;
-            c.element.style.width = `${r.width}px`;
-            c.element.classList.add('dragging');
-        });
-
-        try { targetEl.setPointerCapture?.(e.pointerId); } catch {}
-    }
-
-    handlePointerMove(e) {
-        if (e.pointerType === 'touch') return;
-        if (!this.draggedCard)         return;
-        e.preventDefault();
-
-        const deltaX = e.clientX - this.touchStartX;
-        const deltaY = e.clientY - this.touchStartY;
-
-        if (!this.dragNotTap && (Math.abs(deltaX) > this.tapThreshold || Math.abs(deltaY) > this.tapThreshold)) {
-            this.dragNotTap = true;
-        }
-
-        /*this.draggedStack.forEach(c => {
-            c.element.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
-        });*/
-
-        this.draggedStack.forEach((c, i) => {
-            const origin = this._dragStartRects[i];
-            c.element.style.left  = `${origin.left + deltaX}px`;
-            c.element.style.top   = `${origin.top  + deltaY}px`;
-            c.element.style.width = `${origin.width}px`;
-        });
-    }
-
-    handlePointerUp(e) {
-        if (e.pointerType === 'touch') return;
-        if (!this.draggedCard)         return;
-
-        this.draggedStack.forEach(c => {
-            c.element.classList.remove('dragging');
-            c.element.style.transform = '';
-            c.element.style.left  = '';
-            c.element.style.top   = '';
-            c.element.style.width = '';
-        });
-
-        if (this.dragNotTap) {
-            const targetEl = document.elementFromPoint(e.clientX, e.clientY);
-            this.attemptMove(targetEl, true); // drag — no tap animation
-        } else {
-            this.attemptMove(this.findBestTarget(), false); // tap — animate the move
-        }
-
-        try { this.draggedCard.element.releasePointerCapture?.(e.pointerId); } catch {}
-        this.draggedCard  = null;
-        this.draggedStack = [];
-    }
-
-    // ─── Move Logic ──────────────────────────────────────────────────────────────
-
-    // Returns true if the dragged stack cannot legally be picked up.
     preMoveCheckFailed() {
         for (let i = 0; i < this.draggedStack.length - 1; i++) {
             const curr = this.draggedStack[i];
@@ -1191,16 +454,24 @@ class FreecellGame {
     // Validates and executes a move, then renders and checks for win.
     // isDrag: true when the card was physically dragged (skip tap animation).
     attemptMove(targetEl, isDrag = false) {
-        if (!targetEl) return;
+        if (!this.draggedCard || !targetEl) return;
 
         const sourceEl = this.draggedCard.element.parentElement;
         const destEl   = targetEl.closest('.cell, .foundation, .column')
                       || targetEl.parentElement?.closest('.cell, .foundation, .column');
 
-        if (!destEl || sourceEl === destEl) return;
+        if (!destEl || sourceEl === destEl) {
+            this.draggedCard  = null;
+            this.draggedStack = [];
+            return;
+        }
 
         const destPile = this.getPileForElement(destEl);
-        if (!destPile) return;
+        if (!destPile) {
+            this.draggedCard  = null;
+            this.draggedStack = [];
+            return;
+        }
 
         if (this.isValidMove(this.draggedCard, this.draggedStack, destPile)) {
             this.saveHistory();
@@ -1212,13 +483,19 @@ class FreecellGame {
             const fromRects = isDrag ? null : cardEls.map(el => el.getBoundingClientRect());
 
             this.moveCard(sourceEl, destEl, this.draggedCard.id);
-            this.render(); // renderDOM + runAutoMoves
 
-            if (!isDrag) this.animateCards(cardEls, fromRects);
+            // Clear before render so undo guard is correct from this point on
+            this.draggedCard  = null;
+            this.draggedStack = [];
 
-            if (this.checkWin()) {
-                this.showWinState();
-            }
+            this.render();
+
+            if (!isDrag) CardAnimator.animateCards(cardEls, fromRects);
+
+            if (this.checkWin()) this.showWinState();
+        } else {
+            this.draggedCard  = null;
+            this.draggedStack = [];
         }
     }
 
@@ -1273,15 +550,14 @@ class FreecellGame {
         }
     }
 
-    // ─── Auto-move ───────────────────────────────────────────────────────────────
+    // ─── Auto-move ────────────────────────────────────────────────────────────
 
     findNextAutoMove() {
-        // Respect the autoMove setting
-        if (!this.settings.autoMove) return null;
+        if (!this.settings.get('autoMove')) return null;
 
         const candidates = [
-            ...this.tableau.map((arr, i)   => ({ arr, el: document.getElementById(`col${i + 1}`) })),
-            ...this.freeCells.map((arr, i) => ({ arr, el: document.getElementById(`free${i + 1}`) }))
+            ...this.tableau.map((arr, i)    => ({ arr, el: document.getElementById(`col${i + 1}`) })),
+            ...this.freeCells.map((arr, i)  => ({ arr, el: document.getElementById(`free${i + 1}`) })),
         ].filter(p => p.arr.length > 0);
 
         for (const source of candidates) {
@@ -1337,37 +613,17 @@ class FreecellGame {
 
             // Capture position AFTER render
             const toRect = card.element.getBoundingClientRect();
-            const dx = fromRect.left - toRect.left;
-            const dy = fromRect.top  - toRect.top;
-
-            if (dx !== 0 || dy !== 0) {
-                // Use an IIFE to capture the correct element reference in the closure
-                ((el) => {
-                    el.classList.add('animating');
-                    el.style.transition = 'none';
-                    el.style.transform  = `translate(${dx}px, ${dy}px)`;
-                    requestAnimationFrame(() => {
-                        requestAnimationFrame(() => {
-                            el.style.transition = 'transform 0.3s ease';
-                            el.style.transform  = '';
-                            el.addEventListener('transitionend', () => {
-                                el.style.transition = '';
-                                el.classList.remove('animating');
-                            }, { once: true });
-                        });
-                    });
-                })(card.element);
-            }
+            CardAnimator.animateSingleCard(card.element, fromRect, toRect);
 
             next = this.findNextAutoMove();
         }
     }
 
-    // ─── Win / Reset ─────────────────────────────────────────────────────────────
+    // ─── Score / Moves ────────────────────────────────────────────────────────
 
     updateMovesAndScore() {
         document.getElementById('moves').textContent = `Moves: ${this.moveCount}`;
-        if (this.settings.showScore) {
+        if (this.settings.get('showScore')) {
             const score = 520 - this.moveCount;
             // Alternative scoring: 520 - moveCount (10 pts per foundation card - 1 per move)
             // Alternative scoring: Math.max(0, 500 - this.moveCount * 5 + Math.floor((Date.now() - this.gameStartTime) / 1000));
@@ -1380,23 +636,20 @@ class FreecellGame {
     }
 
     showWinState() {
-        const timeSecs   = Math.floor((Date.now() - this.gameStartTime) / 1000);
+        const timeSecs   = this.timer.getElapsed();
         const finalScore = 520 - this.moveCount;
 
-        // Capture bests BEFORE recordGameWin() updates them
-        const prevBestTime  = this.stats.bestTime;
-        const prevBestScore = this.stats.bestScore;
-        const prevBestMoves = this.stats.bestMoves;
-        const prevBestStreak = this.stats.bestStreak;
+        this.timer.stop();
 
-        this.recordGameWin();
+        const flags = this.stats.recordWin({
+            moves:    this.moveCount,
+            timeSecs: timeSecs,
+            score:    finalScore,
+        });
 
-        const isNewBestTime  = prevBestTime  === null || timeSecs    < prevBestTime;
-        const isNewBestScore = prevBestScore === null || finalScore  > prevBestScore;
-        const isNewBestMoves = prevBestMoves === null || this.moveCount < prevBestMoves;
-        const isNewBestStreak = prevBestStreak === null || this.stats.currentStreak > prevBestStreak;
+        const s   = this.stats.get();
+        const fmt = secs => GameTimer.format(secs);
 
-        const fmt = s => this.formatTime(s);
         const row = (label, thisVal, bestVal, isBest) => `
             <tr>
                 <td class="win-stat-label">${label}</td>
@@ -1411,41 +664,48 @@ class FreecellGame {
                     <td class="win-stat-this"><u>This Game</u></td>
                     <td class="win-stat-best"><u>Best</u></td>
                 </tr>
-                ${row('Time',   fmt(timeSecs),        fmt(this.stats.bestTime),  isNewBestTime)}
-                ${row('Score',  finalScore,            this.stats.bestScore,      isNewBestScore)}
-                ${row('Moves',  this.moveCount,        this.stats.bestMoves,      isNewBestMoves)}
-                ${row('Streak', this.stats.currentStreak,   this.stats.bestStreak,     isNewBestStreak)}
+                ${row('Time',   fmt(timeSecs),     fmt(s.bestTime),     flags.isNewBestTime)}
+                ${row('Score',  finalScore,         s.bestScore,         flags.isNewBestScore)}
+                ${row('Moves',  this.moveCount,     s.bestMoves,         flags.isNewBestMoves)}
+                ${row('Streak', s.currentStreak,    s.bestStreak,        flags.isNewBestStreak)}
             </table>`;
 
-        document.getElementById('win-message').style.display        = 'block';
-        document.getElementById('win-stats').style.display          = 'block';
-        document.getElementById('middle-btn-new-game').style.display = 'flex'; // flex to keep the icon+text row layout
+        document.getElementById('win-message').style.display         = 'block';
+        document.getElementById('win-stats').style.display           = 'block';
+        document.getElementById('middle-btn-new-game').style.display = 'flex';
     }
 
+    // ─── Reset / Restart ──────────────────────────────────────────────────────
+
     restartGame() {
-        if (this.history.length === 0) return; // nothing to restart, game is at start
+        if (this.history.length === 0) return;
 
-        // The oldest history entry contains the state at the very beginning of the game
-        const initial = this.history[0];
-
+        const initial    = this.history[0];
         this.freeCells   = initial.freeCells.map(cell => [...cell]);
         this.foundations = initial.foundations.map(f    => [...f]);
         this.tableau     = initial.tableau.map(col      => [...col]);
+        this.history     = [];
+        this.moveCount   = 0;
 
-        this.history  = [];
-        this.moveCount = 0;
-
-        // Clear the old interval and start a fresh one
-        clearInterval(this.timerInterval);
-        this.gameStartTime = Date.now();
-        this.timerInterval = setInterval(() => {
-            const elapsed = Math.floor((Date.now() - this.gameStartTime) / 1000);
-            document.getElementById('timer').textContent = `Time: ${this.formatTime(elapsed)}`;
-        }, 1000);
-
+        this.timer.start();
         this.renderDOM();
         this.runAutoMoves();
         this.updateMovesAndScore();
+    }
+
+    resetGame() {
+        this.timer.stop();
+        this.deck        = [];
+        this.cardMap     = {};
+        this.freeCells   = [[], [], [], []];
+        this.foundations = [[], [], [], []];
+        this.tableau     = [[], [], [], [], [], [], [], []];
+        this.draggedCard  = null;
+        this.draggedStack = [];
+        this.history     = [];
+        this.moveCount   = 0;
+        this.gameActive  = false;
+        this.init();
     }
 
     clearCacheAndReset() {
@@ -1458,20 +718,7 @@ class FreecellGame {
         this.resetGame();
     }
 
-    resetGame() {
-        this.deck         = [];
-        this.cardMap      = {};
-        this.freeCells    = [[], [], [], []];
-        this.foundations  = [[], [], [], []];
-        this.tableau      = [[], [], [], [], [], [], [], []];
-        this.draggedCard  = null;
-        this.draggedStack = [];
-        this.history      = [];
-        this.moveCount    = 0;
-        this.gameActive   = false;
-        clearInterval(this.timerInterval);
-        this.init();
-    }
+    // ─── Service Worker ───────────────────────────────────────────────────────
 
     registerServiceWorker() {
         if ('serviceWorker' in navigator) {
