@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
     <title>Spider</title>
     <link rel="manifest" href="manifest.json">
-    <link rel="stylesheet" href="css/styleSpider.css">
+    <link rel="stylesheet" href="css/style-spider.css">
     <link rel="stylesheet" href="css/settings.css">
     <meta name="theme-color" content="#008000">
 </head>
@@ -17,7 +17,7 @@
             <div class="scoretext" id="score">Score: 0</div>
         </div>
         <div id="top-area">
-            <div id="foundations">
+            <div id="multi-foundations">
                 <div class="foundation" id="found1" data-pile-type="foundation" data-pile-index="0"></div>
                 <div class="foundation" id="found2" data-pile-type="foundation" data-pile-index="1"></div>
                 <div class="foundation" id="found3" data-pile-type="foundation" data-pile-index="2"></div>
@@ -27,13 +27,12 @@
                 <div class="foundation" id="found7" data-pile-type="foundation" data-pile-index="6"></div>
                 <div class="foundation" id="found8" data-pile-type="foundation" data-pile-index="7"></div>
             </div>
-            <div id="stock">
+            <div id="multi-stock">
                 <div class="stock" id="stock1" data-pile-type="stock" data-pile-index="0"></div>
                 <div class="stock" id="stock2" data-pile-type="stock" data-pile-index="1"></div>
                 <div class="stock" id="stock3" data-pile-type="stock" data-pile-index="2"></div>
                 <div class="stock" id="stock4" data-pile-type="stock" data-pile-index="3"></div>
                 <div class="stock" id="stock5" data-pile-type="stock" data-pile-index="4"></div>
-
             </div>
         </div>
         <div id="tableau">
@@ -72,7 +71,18 @@
         <span class="action-icon">➕</span>
         <span>New Game</span>
     </button>
+
+    <!-- Shared scripts -->
+    <script src="js/storageManager.js" defer></script>
+    <script src="js/gameTimer.js"      defer></script>
+    <script src="js/statsManager.js"   defer></script>
+    <script src="js/settingsManager.js" defer></script>
+    <script src="js/settingsUI.js"     defer></script>
+
+    <!-- QR code library (local copy) -->
     <script src="js/qrcode.min.js" defer></script>
-    <script src="js/app.js" defer></script>
+
+    <!-- Game -->
+    <script src="js/appSpider.js" defer></script>
 </body>
 </html>

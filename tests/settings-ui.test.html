@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>settingsUI tests</title>
+    <style>
+        body { font-family: monospace; padding: 1rem; }
+        .pass { color: green; }
+        .fail { color: red; font-weight: bold; }
+        .info { color: #888; font-style: italic; }
+        h2    { margin-top: 1.5rem; }
+        #summary { margin-top: 1.5rem; font-size: 1.2rem; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <h1>settingsUI.js tests</h1>
+    <div id="results"></div>
+    <div id="summary"></div>
+
+    <script src="../js/storageManager.js"></script>
+    <script src="../js/gameTimer.js"></script>
+    <script src="../js/statsManager.js"></script>
+    <script src="../js/settingsManager.js"></script>
+    <script src="../js/settingsUI.js"></script>
+    <script>
+        const results = document.getElementById('results');
+        let passed = 0;
+        let failed = 0;
+
+        function cleanup() {
+            const overlay = document.getElementById('settings-overlay');
+            if (overlay) overlay.remove();
+            document.body.className = '';
+        }
+
+        function test(description, fn) {
+            cleanup(); // clean up before each test for a fresh state
+            try {
+                fn();
+                results.innerHTML += `<p class="pass">✓ ${description}</p>`;
+                passed++;
+            } catch (e) {
+                results.innerHTML += `<p class="fail">✗ ${description}: ${e.message}</p>`;
+                failed++;
+            }
+        }
+
+        function assert(condition, message) {
+            if (!condition) throw new Error(message || 'Assertion failed');
+        }
+
+        function assertEqual(actual, expected, message) {
+            const a = JSON.stringify(actual);
+            const e = JSON.stringify(expected);
+            if (a !== e) throw new Error(message || `Expected ${e} but got ${a}`);
+        }
+
+        const SETTINGS_KEY = 'test-ui-settings';
+        const STATS_KEY    = 'test-ui-stats';
+
+        const SETTINGS_DEFAULTS = { darkMode: false, showScore: true, showMoves: true };
+        const STATS_DEFAULTS    = {
+            gamesPlayed: 0, gamesWon: 0, bestMoves: null, bestTime: null,
+            bestScore: null, currentStreak: 0, bestStreak: 0,
+            totalMoves: 0, totalTime: 0, totalScore: 0,
+        };
+        const CLASS_MAP = {
+            darkMode:  'dark-mode',
+            showScore: 'hide-score',
+            showMoves: 'hide-moves',
+        };
+        const TOGGLES = [
+            { key: 'showScore', label: 'Show Score' },
+            { key: 'showMoves', label: 'Show Moves' },
+            { key: 'darkMode',  label: 'Dark Mode'  },
+        ];
+        const STAT_FIELDS = [
+            { key: 'gamesPlayed', label: 'Games Played', isTime: false },
+            { key: 'bestTime',    label: 'Best Time',    isTime: true  },
+        ];
+
+        function makeUI(callbacks = {}) {
+            localStorage.removeItem(SETTINGS_KEY);
+            localStorage.removeItem(STATS_KEY);
+            const settings = new SettingsManager(
+                new StorageManager(SETTINGS_KEY), SETTINGS_DEFAULTS, CLASS_MAP
+            );
+            const stats = new StatsManager(
+                new StorageManager(STATS_KEY), STATS_DEFAULTS
+            );
+            return new SettingsUI({
+                version:    '1.0.0',
+                settings,
+                stats,
+                toggles:    TOGGLES,
+                statFields: STAT_FIELDS,
+                rulesHTML:  '<h3>Test Rules</h3><p>Just a test.</p>',
+                onNewGame:  callbacks.onNewGame  || (() => {}),
+                onRestart:  callbacks.onRestart  || (() => {}),
+            });
+        }
+
+        // ─── open() / close() ─────────────────────────────────────────────────────
+
+        results.innerHTML += `<h2>open() / close()</h2>`;
+
+        test('open() adds settings overlay to the DOM', () => {
+            const ui = makeUI();
+            ui.open();
+            assert(document.getElementById('settings-overlay') !== null, 'Overlay should exist');
+        });
+
+        test('open() shows the main screen as active', () => {
+            const ui = makeUI();
+            ui.open();
+            const main = document.getElementById('settings-main');
+            assert(main.classList.contains('active'), 'settings-main should be active');
+        });
+
+        test('close() removes the overlay from the DOM', () => {
+            const ui = makeUI();
+            ui.open();
+            // Remove transitionend dependency by removing directly
+            const overlay = document.getElementById('settings-overlay');
+            overlay.remove();
+            assert(document.getElementById('settings-overlay') === null, 'Overlay should be gone');
+        });
+
+        test('open() called twice only creates one overlay', () => {
+            const ui = makeUI();
+            ui.open();
+            ui.open();
+            const overlays = document.querySelectorAll('#settings-overlay');
+            assertEqual(overlays.length, 1);
+        });
+
+        // ─── HTML content ─────────────────────────────────────────────────────────
+
+        results.innerHTML += `<h2>rendered content</h2>`;
+
+        test('version number is rendered', () => {
+            const ui = makeUI();
+            ui.open();
+            const overlay = document.getElementById('settings-overlay');
+            assert(overlay.innerHTML.includes('1.0.0'), 'Version should appear in overlay');
+        });
+
+        test('toggle labels are rendered from config', () => {
+            const ui = makeUI();
+            ui.open();
+            const overlay = document.getElementById('settings-overlay');
+            assert(overlay.innerHTML.includes('Show Score'), 'Show Score toggle should be present');
+            assert(overlay.innerHTML.includes('Dark Mode'),  'Dark Mode toggle should be present');
+        });
+
+        test('rules HTML is rendered in the rules screen', () => {
+            const ui = makeUI();
+            ui.open();
+            const rulesScreen = document.getElementById('settings-rules');
+            assert(rulesScreen.innerHTML.includes('Test Rules'), 'Rules HTML should appear');
+        });
+
+        test('toggle has "on" class when setting is true', () => {
+            localStorage.removeItem(SETTINGS_KEY);
+            const settings = new SettingsManager(
+                new StorageManager(SETTINGS_KEY), SETTINGS_DEFAULTS, CLASS_MAP
+            );
+            settings.set('showScore', true);
+            const ui = new SettingsUI({
+                version: '1.0', settings,
+                stats: new StatsManager(new StorageManager(STATS_KEY), STATS_DEFAULTS),
+                toggles: TOGGLES, statFields: STAT_FIELDS, rulesHTML: '',
+            });
+            ui.open();
+            const toggle = document.querySelector('[data-setting="showScore"]');
+            assert(toggle.classList.contains('on'), 'Toggle should have "on" class');
+        });
+
+        test('toggle does not have "on" class when setting is false', () => {
+            localStorage.removeItem(SETTINGS_KEY);
+            const settings = new SettingsManager(
+                new StorageManager(SETTINGS_KEY), SETTINGS_DEFAULTS, CLASS_MAP
+            );
+            settings.set('darkMode', false);
+            const ui = new SettingsUI({
+                version: '1.0', settings,
+                stats: new StatsManager(new StorageManager(STATS_KEY), STATS_DEFAULTS),
+                toggles: TOGGLES, statFields: STAT_FIELDS, rulesHTML: '',
+            });
+            ui.open();
+            const toggle = document.querySelector('[data-setting="darkMode"]');
+            assert(!toggle.classList.contains('on'), 'Toggle should not have "on" class');
+        });
+
+        // ─── Screen navigation ────────────────────────────────────────────────────
+
+        results.innerHTML += `<h2>showScreen()</h2>`;
+
+        test('showScreen() activates the target screen', () => {
+            const ui = makeUI();
+            ui.open();
+            ui.showScreen('settings-stats');
+            assert(document.getElementById('settings-stats').classList.contains('active'), 'stats screen should be active');
+        });
+
+        test('showScreen() deactivates all other screens', () => {
+            const ui = makeUI();
+            ui.open();
+            ui.showScreen('settings-stats');
+            assert(!document.getElementById('settings-main').classList.contains('active'), 'main screen should not be active');
+            assert(!document.getElementById('settings-rules').classList.contains('active'), 'rules screen should not be active');
+        });
+
+        test('showScreen() can navigate back to main', () => {
+            const ui = makeUI();
+            ui.open();
+            ui.showScreen('settings-stats');
+            ui.showScreen('settings-main');
+            assert(document.getElementById('settings-main').classList.contains('active'), 'main screen should be active again');
+        });
+
+        // ─── Action button callbacks ──────────────────────────────────────────────
+
+        results.innerHTML += `<h2>action callbacks</h2>`;
+
+        test('onNewGame is called when New Game button is clicked', () => {
+            let called = false;
+            const ui = makeUI({ onNewGame: () => { called = true; } });
+            ui.open();
+            document.getElementById('btn-new-game').click();
+            assert(called, 'onNewGame should have been called');
+        });
+
+        test('onRestart is called when Restart button is clicked', () => {
+            let called = false;
+            const ui = makeUI({ onRestart: () => { called = true; } });
+            ui.open();
+            document.getElementById('btn-restart').click();
+            assert(called, 'onRestart should have been called');
+        });
+
+        // ─── Toggle interaction ───────────────────────────────────────────────────
+
+        results.innerHTML += `<h2>toggle interaction</h2>`;
+
+        test('clicking a toggle flips the setting', () => {
+            const ui = makeUI();
+            ui.open();
+            const toggle = document.querySelector('[data-setting="darkMode"]');
+            toggle.click();
+            assert(ui.settings.get('darkMode') === true, 'darkMode should now be true');
+        });
+
+        test('clicking a toggle updates its "on" class', () => {
+            const ui = makeUI();
+            ui.open();
+            const toggle = document.querySelector('[data-setting="darkMode"]');
+            toggle.click();
+            assert(toggle.classList.contains('on'), 'Toggle should have "on" class after click');
+        });
+
+        test('clicking a toggle twice returns to original state', () => {
+            const ui = makeUI();
+            ui.open();
+            const toggle = document.querySelector('[data-setting="darkMode"]');
+            toggle.click();
+            toggle.click();
+            assert(ui.settings.get('darkMode') === false, 'darkMode should be false again');
+            assert(!toggle.classList.contains('on'), '"on" class should be removed');
+        });
+
+        // ─── Clean up ─────────────────────────────────────────────────────────────
+        localStorage.removeItem(SETTINGS_KEY);
+        localStorage.removeItem(STATS_KEY);
+
+        // ─── Summary ─────────────────────────────────────────────────────────────
+        const summary = document.getElementById('summary');
+        const total = passed + failed;
+        summary.textContent = `${passed} / ${total} tests passed`;
+        summary.style.color = failed === 0 ? 'green' : 'red';
+    </script>
+</body>
+</html>

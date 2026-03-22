@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>gameTimer tests</title>
+    <style>
+        body { font-family: monospace; padding: 1rem; }
+        .pass { color: green; }
+        .fail { color: red; font-weight: bold; }
+        .info { color: #888; font-style: italic; }
+        #summary { margin-top: 1.5rem; font-size: 1.2rem; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <h1>gameTimer.js tests</h1>
+    <div id="results"></div>
+    <div id="summary"></div>
+
+    <script src="../js/gameTimer.js"></script>
+    <script>
+        const results = document.getElementById('results');
+        let passed = 0;
+        let failed = 0;
+
+        function test(description, fn) {
+            try {
+                fn();
+                results.innerHTML += `<p class="pass">✓ ${description}</p>`;
+                passed++;
+            } catch (e) {
+                results.innerHTML += `<p class="fail">✗ ${description}: ${e.message}</p>`;
+                failed++;
+            }
+        }
+
+        // Async test: returns a Promise, test runner awaits it
+        function testAsync(description, fn) {
+            return fn().then(() => {
+                results.innerHTML += `<p class="pass">✓ ${description}</p>`;
+                passed++;
+            }).catch(e => {
+                results.innerHTML += `<p class="fail">✗ ${description}: ${e.message}</p>`;
+                failed++;
+            });
+        }
+
+        function assert(condition, message) {
+            if (!condition) throw new Error(message || 'Assertion failed');
+        }
+
+        function assertEqual(actual, expected, message) {
+            const a = JSON.stringify(actual);
+            const e = JSON.stringify(expected);
+            if (a !== e) throw new Error(message || `Expected ${e} but got ${a}`);
+        }
+
+        function wait(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+
+        // ─── GameTimer.format() ───────────────────────────────────────────────────
+
+        results.innerHTML += `<h2>GameTimer.format()</h2>`;
+
+        test('formats 0 seconds as "0:00"', () => {
+            assertEqual(GameTimer.format(0), '0:00');
+        });
+
+        test('formats 59 seconds as "0:59"', () => {
+            assertEqual(GameTimer.format(59), '0:59');
+        });
+
+        test('formats 60 seconds as "1:00"', () => {
+            assertEqual(GameTimer.format(60), '1:00');
+        });
+
+        test('formats 90 seconds as "1:30"', () => {
+            assertEqual(GameTimer.format(90), '1:30');
+        });
+
+        test('formats 3600 seconds as "60:00"', () => {
+            assertEqual(GameTimer.format(3600), '60:00');
+        });
+
+        test('pads single-digit seconds with a leading zero', () => {
+            assertEqual(GameTimer.format(61), '1:01');
+        });
+
+        // ─── GameTimer.secsToHMS() ────────────────────────────────────────────────
+
+        results.innerHTML += `<h2>GameTimer.secsToHMS()</h2>`;
+
+        test('formats 0 as "0:00:00"', () => {
+            assertEqual(GameTimer.secsToHMS(0), '0:00:00');
+        });
+
+        test('formats 90 as "0:01:30"', () => {
+            assertEqual(GameTimer.secsToHMS(90), '0:01:30');
+        });
+
+        test('formats 3661 as "1:01:01"', () => {
+            assertEqual(GameTimer.secsToHMS(3661), '1:01:01');
+        });
+
+        test('pads minutes and seconds with leading zeros', () => {
+            assertEqual(GameTimer.secsToHMS(3600 + 60 + 5), '1:01:05');
+        });
+
+        // ─── GameTimer.HMSToSecs() ────────────────────────────────────────────────
+
+        results.innerHTML += `<h2>GameTimer.HMSToSecs()</h2>`;
+
+        test('parses "0:00:00" as 0', () => {
+            assertEqual(GameTimer.HMSToSecs('0:00:00'), 0);
+        });
+
+        test('parses "0:01:30" as 90', () => {
+            assertEqual(GameTimer.HMSToSecs('0:01:30'), 90);
+        });
+
+        test('parses "1:01:01" as 3661', () => {
+            assertEqual(GameTimer.HMSToSecs('1:01:01'), 3661);
+        });
+
+        test('parses "mm:ss" format as well as "h:mm:ss"', () => {
+            assertEqual(GameTimer.HMSToSecs('1:30'), 90);
+        });
+
+        test('parses raw seconds string', () => {
+            assertEqual(GameTimer.HMSToSecs('90'), 90);
+        });
+
+        test('returns null for invalid input', () => {
+            assertEqual(GameTimer.HMSToSecs('abc'), null);
+        });
+
+        test('returns null for partially invalid input', () => {
+            assertEqual(GameTimer.HMSToSecs('1:abc:00'), null);
+        });
+
+        test('secsToHMS and HMSToSecs round-trip correctly', () => {
+            const original = 3723;
+            assertEqual(GameTimer.HMSToSecs(GameTimer.secsToHMS(original)), original);
+        });
+
+        // ─── getElapsed() ─────────────────────────────────────────────────────────
+
+        results.innerHTML += `<h2>getElapsed()</h2>`;
+
+        test('returns 0 before timer is started', () => {
+            const t = new GameTimer(() => {});
+            assertEqual(t.getElapsed(), 0);
+        });
+
+        test('returns 0 immediately after start()', () => {
+            const t = new GameTimer(() => {});
+            t.start();
+            assertEqual(t.getElapsed(), 0);
+            t.stop();
+        });
+
+        // ─── onTick callback ──────────────────────────────────────────────────────
+
+        results.innerHTML += `<h2>onTick callback</h2>`;
+        results.innerHTML += `<p class="info">Note: these tests wait for real time to pass and may take a few seconds.</p>`;
+
+        // Run async tests sequentially
+        (async () => {
+            await testAsync('onTick is called after ~1 second with formatted time', () => {
+                return new Promise((resolve, reject) => {
+                    let calls = 0;
+                    const t = new GameTimer(formatted => {
+                        calls++;
+                        try {
+                            assert(typeof formatted === 'string', 'formatted should be a string');
+                            assert(formatted.includes(':'), 'formatted should contain a colon');
+                            t.stop();
+                            resolve();
+                        } catch(e) {
+                            t.stop();
+                            reject(e);
+                        }
+                    });
+                    t.start();
+                    // Fail-safe: if callback never fires within 2s, fail the test
+                    setTimeout(() => {
+                        t.stop();
+                        if (calls === 0) reject(new Error('onTick was never called'));
+                    }, 2000);
+                });
+            });
+
+            await testAsync('stop() prevents further onTick calls', () => {
+                return new Promise((resolve, reject) => {
+                    let calls = 0;
+                    const t = new GameTimer(() => { calls++; });
+                    t.start();
+                    setTimeout(() => t.stop(), 1500); // stop after 1.5s (1 tick expected)
+                    setTimeout(() => {
+                        try {
+                            assertEqual(calls, 1, `Expected 1 tick but got ${calls}`);
+                            resolve();
+                        } catch(e) {
+                            reject(e);
+                        }
+                    }, 2500); // check after 2.5s (would be 2 ticks if not stopped)
+                });
+            });
+
+            await testAsync('start() resets elapsed time when called again', () => {
+                return new Promise((resolve, reject) => {
+                    const t = new GameTimer(() => {});
+                    t.start();
+                    setTimeout(() => {
+                        t.start(); // restart
+                        try {
+                            assertEqual(t.getElapsed(), 0, 'Elapsed should reset to 0 on restart');
+                            t.stop();
+                            resolve();
+                        } catch(e) {
+                            t.stop();
+                            reject(e);
+                        }
+                    }, 1500);
+                });
+            });
+
+            // ─── Summary ─────────────────────────────────────────────────────────
+            const summary = document.getElementById('summary');
+            const total = passed + failed;
+            summary.textContent = `${passed} / ${total} tests passed`;
+            summary.style.color = failed === 0 ? 'green' : 'red';
+        })();
+    </script>
+</body>
+</html>

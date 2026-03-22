@@ -1,0 +1,150 @@
+html, body {
+    height: 100%; /*force fill full height*/
+    overflow: hidden; /*prevents scrolling in main window*/
+}
+
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    background-color: #008000;
+    color: white;
+    touch-action: manipulation; /* Disables touch double-tap zoom */
+    user-select: none; /* prevent text from being selected/highlighted */
+}
+
+#game {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    height: 100vh;
+}
+
+#score-bar {
+    display: flex;
+    flex-direction: row;
+    justify-content: center;
+    gap: 8vw;
+    width: calc(100% - 150px);
+    margin-top: 1vh;
+}
+
+#top-area {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    width: 100%;
+    margin: 1vh 0; /* top/bottom */
+}
+
+#tableau {
+    display: flex;
+    justify-content: space-around;
+    width: 100%;
+    flex: 1;
+}
+
+#multi-foundations, #multi-stock  {
+    border-radius: 8%;
+    background-color: rgba(255, 255, 255, 0.1);
+    margin: 0 5vw; /* left/right */
+}
+
+.column {
+    position: relative; /* allows ::before to be relative to each .column */
+}
+.column::before {
+    content: ""; /* allows this ::before pseudo-element to render */
+    position: absolute; /* needed for overlay */
+    left: 50%;
+    transform: translateX(-50%);
+    aspect-ratio: 1 / 1.4;
+    border-radius: 8%;
+    background-color: rgba(255, 255, 255, 0.2);
+    pointer-events: none; /* could intercept click without this, but not sure */
+    z-index: 0; /* could help keep behind other elements, but not sure */
+}
+
+.number-bar {
+    position: fixed;
+    display: flex;
+}
+.num {
+    flex: 1; /* spread out across number-bar parent */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #005c00;
+    font-size: clamp(8px, 2vh, 18px);
+}
+
+.top-button {
+    position: fixed; /* not relative to other elements */
+    top: 0;
+    font-size: clamp(14px, 3vw, 28px);
+    padding: clamp(4px, 1vw, 12px) clamp(8px, 2vw, 24px); /* pad around font top/bot left/right*/
+    margin: 0.5vh; /* space outside border */
+    background-color: #00000000; /* fully transparent */
+    color: white;
+    border: none;
+}
+.settings { left: 0; }
+.undo { right: 0; }
+
+/* Portrait: height > width */
+@media (max-aspect-ratio: 1/1) {
+    #multi-foundations {
+        width: 32vw; /* 9.6 + 3.2 * 7 */
+        height: 13.44vw; /* 9.6*1.4 */
+    }
+    #multi-stock {
+        width: 22.4vw; /* 9.6 + 3.2 * 4 */
+        height: 13.44vw; /* 9.6*1.4 */
+    }
+    .column, .column::before {
+        width: 9.6vw;
+    }
+    .number-bar {
+        bottom: 0;
+        left: 5vh; /* gap on sides to avoid rounded screen corners */
+        right: 5vh;
+        height: 5vh;
+        flex-direction: row;
+    }
+}
+
+/* Landscape: width > height */
+@media (min-aspect-ratio: 1/1) {
+    #multi-foundations {
+        width: min(32vh, 90vw); /* 9.6 + 3.2 * 7 */
+        height: 13.44vh; /* 9.6*1.4 */
+    }
+    #multi-stock {
+        width: min(22.4vh, 90vw); /* 9.6 + 3.2 * 4 */
+        height: 13.44vh; /* 9.6*1.4 */
+    }
+    #tableau, #top-area {
+        width: 90%;
+    }
+    .column, .column::before {
+        width: min(9.6vh, 90vw);
+    }
+    .number-bar {
+        top: clamp(60px, 15vh, 15vh); /* Don't start at the very top to avoid overlapping with the top button */
+        bottom: 5vh; /* gap on bottom to avoid rounded screen corners */
+        right: 0;
+        width: 5vw;
+        flex-direction: column;
+    }
+}
+
+/* DEBUG */
+@media (max-width: 10000px) {
+    .top-button { border: 1px solid red; }
+    .number-bar { border: 1px solid red; }
+    #score-bar { border: 1px solid red; }
+    #game { border: 3px solid greenyellow; }
+    .column { border: 1px solid blue; }
+    #tableau { border: 1px solid rgb(0, 255, 255); }
+    #top-area { border: 1px solid purple; }
+}
