@@ -84,7 +84,7 @@ class StatsManager {
         };
     }
 
-    // Call when a game is abandoned (new game, restart, etc.)
+    // Call when a game is abandoned (new game, etc.)
     recordAbandoned() {
         this.data.currentStreak = 0;
         this.storage.save(this.data);

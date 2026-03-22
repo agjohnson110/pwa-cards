@@ -19,6 +19,7 @@ class SpiderGame {
                 showMoves:     true,
                 showTime:      true,
                 showNumberBar: true,
+                showGrouping:  true,
                 difficulty:    1,    // 1 = one suit, 2 = two suits, 4 = four suits
             },
             {
@@ -93,7 +94,6 @@ class SpiderGame {
                 this.resetGame();
             },
             onRestart: () => {
-                this.stats.recordAbandoned();
                 this.restartGame();
             },
         });

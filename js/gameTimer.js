@@ -49,11 +49,19 @@ class GameTimer {
     // Static so they can be used without a timer instance, e.g. when
     // displaying saved best times from stats.
 
-    // Formats seconds as "m:ss" e.g. 90 → "1:30"
+    // Formats seconds as "h:mm:ss" e.g. 90 → "1:30"
     static format(seconds) {
-        const m = Math.floor(seconds / 60);
+        const h = Math.floor(seconds / 3600);
+        const m = Math.floor((seconds % 3600) / 60);
         const s = seconds % 60;
-        return `${m}:${s.toString().padStart(2, '0')}`;
+
+        if (h > 0) {
+            return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+        } else if (m > 0) {
+            return `${m}:${s.toString().padStart(2, '0')}`;
+        } else {
+            return `${s}`;
+        }
     }
 
     // Formats seconds as "h:mm:ss" e.g. 90 → "0:01:30"

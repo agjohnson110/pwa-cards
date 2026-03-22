@@ -223,8 +223,13 @@ class SettingsUI {
                     </div>
                 </div>
                 <div class="settings-divider"></div>
-                <button class="settings-danger-btn" id="btn-reset-stats">Reset Statistics</button>
-                <button class="settings-action-btn" id="btn-edit-stats">
+                <button class="settings-action-btn" id="btn-reset-stats"
+                        style="margin: 3px 16px; width: calc(100% - 32px);">
+                    <span class="action-icon">❌</span>
+                    <span>Reset Statistics</span>
+                </button>
+                <button class="settings-action-btn" id="btn-edit-stats"
+                        style="margin: 3px 16px; width: calc(100% - 32px);">
                     <span class="action-icon">✏️</span>
                     <span>Edit Statistics</span>
                     <span class="action-chevron">›</span>
@@ -256,7 +261,7 @@ class SettingsUI {
                     <div style="width:2em"></div>
                 </div>
                 <div class="settings-text-body">
-                    <p>Enter your stats from another game to import them here.</p>
+                    <p>Enter your statistics from another app to import them into this one.</p>
                 </div>
                 <div class="stats-edit-grid">
                     ${fieldsHTML}
