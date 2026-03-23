@@ -3,13 +3,13 @@
 .settings-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.5);
+    background: rgba(0, 0, 0, 0.5); /* dims rest of page */
     z-index: 2000;
     display: flex;
     align-items: center;
     justify-content: center;
-    opacity: 0;
-    transition: opacity 0.2s ease;
+    opacity: 0; /* starts invisiable */
+    transition: opacity 0.2s ease; /* fades in when visible */
 }
 
 .settings-overlay.visible {
@@ -21,10 +21,10 @@
     border-radius: 16px;
     width: min(340px, 90vw);
     max-height: 85vh;
-    overflow: visible;
+    overflow: hidden; /* hidden allows screen scroll to work */
     box-shadow: 0 8px 40px rgba(0,0,0,0.35);
     position: relative;
-    transform: translateY(10px);
+    transform: translateY(10px); /* slides up animation when started */
     transition: transform 0.2s ease;
 }
 
@@ -32,10 +32,10 @@
     transform: translateY(0);
 }
 
-/* ─── Settings Screens (main / stats) ───────────────────────────────────────── */
+/* ─── Settings Screens (main / stats / rules / share / edit stats) ──────────── */
 
 .settings-screen {
-    display: none;
+    display: none; /* all popup screens start hidden */
     flex-direction: column;
     padding: 0 0 16px 0;
     max-height: 85vh;
@@ -53,8 +53,8 @@
     align-items: center;
     justify-content: space-between;
     padding: 16px 16px 12px 16px;
-    border-bottom: 1px solid rgba(0,0,0,0.1);
-    position: sticky;
+    border-bottom: 1px solid rgba(0,0,0,0.1); /* divider line */
+    position: sticky; /* stays on top during scrolling. Needs background and z-index below to work */
     top: 0;
     background: #f5f0e8;
     z-index: 1;
@@ -75,13 +75,13 @@
     width: 30px;
     height: 30px;
     font-size: 16px;
-    cursor: pointer;
+    cursor: pointer; /* hand cursor on hover */
     color: #333;
     display: flex;
     align-items: center;
     justify-content: center;
-    touch-action: manipulation;
-    line-height: 1;
+    touch-action: manipulation; /* disable mobile tap delay */
+    line-height: 1; /* prevent icon vertical off-center */
 }
 
 .settings-back {
@@ -124,6 +124,7 @@
     font-size: 18px;
     width: 24px;
     text-align: center;
+    line-height: 1; /* prevent icon vertical off-center */
 }
 
 .action-chevron {
@@ -131,6 +132,7 @@
     font-size: 20px;
     color: #999;
     font-weight: 300;
+    line-height: 1; /* prevent icon vertical off-center */
 }
 
 /* ─── Divider ────────────────────────────────────────────────────────────────── */

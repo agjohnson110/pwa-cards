@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>settingsManager tests</title>
+    <style>
+        body { font-family: monospace; padding: 1rem; }
+        .pass { color: green; }
+        .fail { color: red; font-weight: bold; }
+        h2    { margin-top: 1.5rem; }
+        #summary { margin-top: 1.5rem; font-size: 1.2rem; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <h1>settingsManager.js tests</h1>
+    <div id="results"></div>
+    <div id="summary"></div>
+
+    <script src="../js/storageManager.js"></script>
+    <script src="../js/settingsManager.js"></script>
+    <script>
+        const results = document.getElementById('results');
+        let passed = 0;
+        let failed = 0;
+
+        function test(description, fn) {
+            try {
+                fn();
+                results.innerHTML += `<p class="pass">✓ ${description}</p>`;
+                passed++;
+            } catch (e) {
+                results.innerHTML += `<p class="fail">✗ ${description}: ${e.message}</p>`;
+                failed++;
+            }
+        }
+
+        function assert(condition, message) {
+            if (!condition) throw new Error(message || 'Assertion failed');
+        }
+
+        function assertEqual(actual, expected, message) {
+            const a = JSON.stringify(actual);
+            const e = JSON.stringify(expected);
+            if (a !== e) throw new Error(message || `Expected ${e} but got ${a}`);
+        }
+
+        const KEY = 'test-settings-manager';
+        const DEFAULTS = {
+            darkMode:     false,
+            showScore:    true,
+            showMoves:    true,
+            showTime:     true,
+            showNumberBar: true,
+        };
+        const CLASS_MAP = {
+            darkMode:      'dark-mode',
+            showScore:     'hide-score',
+            showMoves:     'hide-moves',
+            showTime:      'hide-time',
+            showNumberBar: 'hide-number-bar',
+        };
+
+        function makeSettings(onApply = null) {
+            localStorage.removeItem(KEY);
+            // Clean up any CSS classes left from previous tests
+            document.body.className = '';
+            return new SettingsManager(
+                new StorageManager(KEY), DEFAULTS, CLASS_MAP, onApply
+            );
+        }
+
+        // ─── get() / getAll() ─────────────────────────────────────────────────────
+
+        results.innerHTML += `<h2>get() / getAll()</h2>`;
+
+        test('get() returns default value for a key', () => {
+            const s = makeSettings();
+            assertEqual(s.get('darkMode'), false);
+            assertEqual(s.get('showScore'), true);
+        });
+
+        test('getAll() returns all defaults', () => {
+            const s = makeSettings();
+            assertEqual(s.getAll(), DEFAULTS);
+        });
+
+        test('getAll() returns a copy, not the internal object', () => {
+            const s = makeSettings();
+            const a = s.getAll();
+            const b = s.getAll();
+            assert(a !== b, 'Should return a new object each time');
+        });
+
+        // ─── set() ───────────────────────────────────────────────────────────────
+
+        results.innerHTML += `<h2>set()</h2>`;
+
+        test('set() updates the value', () => {
+            const s = makeSettings();
+            s.set('darkMode', true);
+            assertEqual(s.get('darkMode'), true);
+        });
+
+        test('set() persists to localStorage', () => {
+            const s = makeSettings();
+            s.set('darkMode', true);
+            const reloaded = new SettingsManager(new StorageManager(KEY), DEFAULTS, CLASS_MAP);
+            assertEqual(reloaded.get('darkMode'), true);
+        });
+
+        test('set() does not affect other settings', () => {
+            const s = makeSettings();
+            s.set('darkMode', true);
+            assertEqual(s.get('showScore'), true);
+            assertEqual(s.get('showMoves'), true);
+        });
+
+        // ─── toggle() ────────────────────────────────────────────────────────────
+
+        results.innerHTML += `<h2>toggle()</h2>`;
+
+        test('toggle() flips false to true', () => {
+            const s = makeSettings();
+            s.toggle('darkMode');
+            assertEqual(s.get('darkMode'), true);
+        });
+
+        test('toggle() flips true to false', () => {
+            const s = makeSettings();
+            s.toggle('showScore');
+            assertEqual(s.get('showScore'), false);
+        });
+
+        test('toggle() twice returns to original value', () => {
+            const s = makeSettings();
+            s.toggle('darkMode');
+            s.toggle('darkMode');
+            assertEqual(s.get('darkMode'), false);
+        });
+
+        test('toggle() persists to localStorage', () => {
+            const s = makeSettings();
+            s.toggle('darkMode');
+            const reloaded = new SettingsManager(new StorageManager(KEY), DEFAULTS, CLASS_MAP);
+            assertEqual(reloaded.get('darkMode'), true);
+        });
+
+        // ─── apply() — normal classes ─────────────────────────────────────────────
+
+        results.innerHTML += `<h2>apply() — CSS classes</h2>`;
+
+        test('apply() adds dark-mode class when darkMode is true', () => {
+            const s = makeSettings();
+            s.set('darkMode', true);
+            assert(document.body.classList.contains('dark-mode'), 'Expected dark-mode class');
+        });
+
+        test('apply() removes dark-mode class when darkMode is false', () => {
+            const s = makeSettings();
+            s.set('darkMode', true);
+            s.set('darkMode', false);
+            assert(!document.body.classList.contains('dark-mode'), 'Expected dark-mode class to be removed');
+        });
+
+        // ─── apply() — inverted (hide-*) classes ─────────────────────────────────
+
+        test('apply() adds hide-score when showScore is false', () => {
+            const s = makeSettings();
+            s.set('showScore', false);
+            assert(document.body.classList.contains('hide-score'), 'Expected hide-score class');
+        });
+
+        test('apply() removes hide-score when showScore is true', () => {
+            const s = makeSettings();
+            s.set('showScore', false);
+            s.set('showScore', true);
+            assert(!document.body.classList.contains('hide-score'), 'Expected hide-score to be removed');
+        });
+
+        test('apply() adds hide-number-bar when showNumberBar is false', () => {
+            const s = makeSettings();
+            s.set('showNumberBar', false);
+            assert(document.body.classList.contains('hide-number-bar'), 'Expected hide-number-bar class');
+        });
+
+        test('apply() correctly sets all classes at once', () => {
+            const s = makeSettings();
+            s.set('darkMode', true);
+            s.set('showScore', false);
+            s.set('showMoves', false);
+            assert(document.body.classList.contains('dark-mode'),  'Expected dark-mode');
+            assert(document.body.classList.contains('hide-score'), 'Expected hide-score');
+            assert(document.body.classList.contains('hide-moves'), 'Expected hide-moves');
+            assert(!document.body.classList.contains('hide-time'), 'Expected hide-time to be absent');
+        });
+
+        // ─── onApply callback ─────────────────────────────────────────────────────
+
+        results.innerHTML += `<h2>onApply callback</h2>`;
+
+        test('onApply is called when set() is called', () => {
+            let callCount = 0;
+            const s = makeSettings(() => callCount++);
+            s.set('darkMode', true);
+            assertEqual(callCount, 1);
+        });
+
+        test('onApply is called when toggle() is called', () => {
+            let callCount = 0;
+            const s = makeSettings(() => callCount++);
+            s.toggle('darkMode');
+            assertEqual(callCount, 1);
+        });
+
+        test('onApply is called when apply() is called directly', () => {
+            let callCount = 0;
+            const s = makeSettings(() => callCount++);
+            s.apply();
+            assertEqual(callCount, 1);
+        });
+
+        test('onApply is not required — no error when omitted', () => {
+            const s = makeSettings(); // no onApply
+            s.set('darkMode', true);  // should not throw
+            assert(true);
+        });
+
+        // ─── persistence across reload ────────────────────────────────────────────
+
+        results.innerHTML += `<h2>persistence</h2>`;
+
+        test('settings survive a simulated page reload', () => {
+            const s = makeSettings();
+            s.set('darkMode', true);
+            s.set('showScore', false);
+
+            // Simulate reload by creating a new instance with the same key
+            const reloaded = new SettingsManager(new StorageManager(KEY), DEFAULTS, CLASS_MAP);
+            assertEqual(reloaded.get('darkMode'), true);
+            assertEqual(reloaded.get('showScore'), false);
+            assertEqual(reloaded.get('showMoves'), true); // unchanged default
+        });
+
+        // ─── Clean up ─────────────────────────────────────────────────────────────
+        localStorage.removeItem(KEY);
+        document.body.className = '';
+
+        // ─── Summary ─────────────────────────────────────────────────────────────
+        const summary = document.getElementById('summary');
+        const total = passed + failed;
+        summary.textContent = `${passed} / ${total} tests passed`;
+        summary.style.color = failed === 0 ? 'green' : 'red';
+    </script>
+</body>
+</html>

@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>storageManager tests</title>
+    <style>
+        body { font-family: monospace; padding: 1rem; }
+        .pass { color: green; }
+        .fail { color: red; font-weight: bold; }
+        h2    { margin-top: 1.5rem; }
+        #summary { margin-top: 1.5rem; font-size: 1.2rem; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <h1>storageManager.js tests</h1>
+    <div id="results"></div>
+    <div id="summary"></div>
+
+    <script src="../js/storageManager.js"></script>
+    <script>
+        const results = document.getElementById('results');
+        let passed = 0;
+        let failed = 0;
+
+        function test(description, fn) {
+            try {
+                fn();
+                results.innerHTML += `<p class="pass">✓ ${description}</p>`;
+                passed++;
+            } catch (e) {
+                results.innerHTML += `<p class="fail">✗ ${description}: ${e.message}</p>`;
+                failed++;
+            }
+        }
+
+        function assert(condition, message) {
+            if (!condition) throw new Error(message || 'Assertion failed');
+        }
+
+        function assertEqual(actual, expected, message) {
+            const a = JSON.stringify(actual);
+            const e = JSON.stringify(expected);
+            if (a !== e) throw new Error(message || `Expected ${e} but got ${a}`);
+        }
+
+        // Use a test-specific key so we never pollute real game data
+        const KEY = 'test-storage-manager';
+        const DEFAULTS = { darkMode: false, showScore: true, volume: 5 };
+
+        // Clean up before running
+        localStorage.removeItem(KEY);
+
+        // ─── load() ──────────────────────────────────────────────────────────────
+
+        const s = new StorageManager(KEY);
+
+        test('load() returns defaults when nothing is saved', () => {
+            const data = s.load(DEFAULTS);
+            assertEqual(data, DEFAULTS);
+        });
+
+        test('load() returns a copy of defaults, not the same object', () => {
+            const data = s.load(DEFAULTS);
+            assert(data !== DEFAULTS, 'Should be a new object, not the same reference');
+        });
+
+        test('load() merges saved data with defaults', () => {
+            localStorage.setItem(KEY, JSON.stringify({ darkMode: true }));
+            const data = s.load(DEFAULTS);
+            assertEqual(data, { darkMode: true, showScore: true, volume: 5 });
+        });
+
+        test('load() fills in missing keys from defaults (forward compatibility)', () => {
+            localStorage.setItem(KEY, JSON.stringify({ darkMode: true }));
+            const data = s.load({ ...DEFAULTS, newKey: 'hello' });
+            assertEqual(data.newKey, 'hello');
+        });
+
+        test('load() returns defaults on corrupted localStorage data', () => {
+            localStorage.setItem(KEY, 'not valid json {{');
+            const data = s.load(DEFAULTS);
+            assertEqual(data, DEFAULTS);
+        });
+
+        // ─── save() ──────────────────────────────────────────────────────────────
+
+        test('save() persists data to localStorage', () => {
+            localStorage.removeItem(KEY);
+            s.save({ darkMode: true, showScore: false, volume: 3 });
+            const raw = localStorage.getItem(KEY);
+            assert(raw !== null, 'Nothing was saved to localStorage');
+            assertEqual(JSON.parse(raw), { darkMode: true, showScore: false, volume: 3 });
+        });
+
+        test('save() then load() round-trips correctly', () => {
+            localStorage.removeItem(KEY);
+            const original = { darkMode: true, showScore: false, volume: 3 };
+            s.save(original);
+            const loaded = s.load(DEFAULTS);
+            assertEqual(loaded, original);
+        });
+
+        test('save() overwrites previous saved data', () => {
+            s.save({ darkMode: true, showScore: true, volume: 5 });
+            s.save({ darkMode: false, showScore: false, volume: 1 });
+            const loaded = s.load(DEFAULTS);
+            assertEqual(loaded.darkMode, false);
+            assertEqual(loaded.volume, 1);
+        });
+
+        // ─── clear() ─────────────────────────────────────────────────────────────
+
+        test('clear() removes the key from localStorage', () => {
+            s.save(DEFAULTS);
+            s.clear();
+            assert(localStorage.getItem(KEY) === null, 'Key should be gone after clear()');
+        });
+
+        test('load() returns defaults after clear()', () => {
+            s.save({ darkMode: true, showScore: false, volume: 3 });
+            s.clear();
+            const data = s.load(DEFAULTS);
+            assertEqual(data, DEFAULTS);
+        });
+
+        // ─── isolation ───────────────────────────────────────────────────────────
+
+        test('two instances with different keys do not share data', () => {
+            const KEY_A = 'test-sm-a';
+            const KEY_B = 'test-sm-b';
+            localStorage.removeItem(KEY_A);
+            localStorage.removeItem(KEY_B);
+
+            const a = new StorageManager(KEY_A);
+            const b = new StorageManager(KEY_B);
+
+            a.save({ value: 1 });
+            b.save({ value: 2 });
+
+            assertEqual(a.load({ value: 0 }).value, 1);
+            assertEqual(b.load({ value: 0 }).value, 2);
+
+            localStorage.removeItem(KEY_A);
+            localStorage.removeItem(KEY_B);
+        });
+
+        // ─── Clean up ────────────────────────────────────────────────────────────
+        localStorage.removeItem(KEY);
+
+        // ─── Summary ─────────────────────────────────────────────────────────────
+        const summary = document.getElementById('summary');
+        const total = passed + failed;
+        summary.textContent = `${passed} / ${total} tests passed`;
+        summary.style.color = failed === 0 ? 'green' : 'red';
+    </script>
+</body>
+</html>

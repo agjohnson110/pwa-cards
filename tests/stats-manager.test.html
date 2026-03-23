@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>statsManager tests</title>
+    <style>
+        body { font-family: monospace; padding: 1rem; }
+        .pass { color: green; }
+        .fail { color: red; font-weight: bold; }
+        h2    { margin-top: 1.5rem; }
+        #summary { margin-top: 1.5rem; font-size: 1.2rem; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <h1>statsManager.js tests</h1>
+    <div id="results"></div>
+    <div id="summary"></div>
+
+    <script src="../js/storageManager.js"></script>
+    <script src="../js/statsManager.js"></script>
+    <script>
+        const results = document.getElementById('results');
+        let passed = 0;
+        let failed = 0;
+
+        function test(description, fn) {
+            try {
+                fn();
+                results.innerHTML += `<p class="pass">✓ ${description}</p>`;
+                passed++;
+            } catch (e) {
+                results.innerHTML += `<p class="fail">✗ ${description}: ${e.message}</p>`;
+                failed++;
+            }
+        }
+
+        function assert(condition, message) {
+            if (!condition) throw new Error(message || 'Assertion failed');
+        }
+
+        function assertEqual(actual, expected, message) {
+            const a = JSON.stringify(actual);
+            const e = JSON.stringify(expected);
+            if (a !== e) throw new Error(message || `Expected ${e} but got ${a}`);
+        }
+
+        // Fresh StatsManager for each test group — uses a test-only storage key
+        const KEY = 'test-stats-manager';
+        const DEFAULTS = {
+            gamesPlayed:   0,
+            gamesWon:      0,
+            bestMoves:     null,
+            bestTime:      null,
+            bestScore:     null,
+            currentStreak: 0,
+            bestStreak:    0,
+            totalMoves:    0,
+            totalTime:     0,
+            totalScore:    0,
+        };
+
+        function makeStats() {
+            localStorage.removeItem(KEY);
+            return new StatsManager(new StorageManager(KEY), DEFAULTS);
+        }
+
+        // ─── Initial state ────────────────────────────────────────────────────────
+
+        results.innerHTML += `<h2>Initial state</h2>`;
+
+        test('get() returns defaults when nothing is saved', () => {
+            const s = makeStats();
+            assertEqual(s.get(), DEFAULTS);
+        });
+
+        test('get() returns a copy, not the internal object', () => {
+            const s = makeStats();
+            const a = s.get();
+            const b = s.get();
+            assert(a !== b, 'Each call should return a new object');
+        });
+
+        // ─── recordStart() ────────────────────────────────────────────────────────
+
+        results.innerHTML += `<h2>recordStart()</h2>`;
+
+        test('increments gamesPlayed', () => {
+            const s = makeStats();
+            s.recordStart();
+            assertEqual(s.get().gamesPlayed, 1);
+        });
+
+        test('persists gamesPlayed to localStorage', () => {
+            const s = makeStats();
+            s.recordStart();
+            const reloaded = new StatsManager(new StorageManager(KEY), DEFAULTS);
+            assertEqual(reloaded.get().gamesPlayed, 1);
+        });
+
+        test('does not affect any other stat fields', () => {
+            const s = makeStats();
+            s.recordStart();
+            const data = s.get();
+            assertEqual(data.gamesWon, 0);
+            assertEqual(data.currentStreak, 0);
+            assertEqual(data.totalMoves, 0);
+        });
+
+        // ─── recordWin() ──────────────────────────────────────────────────────────
+
+        results.innerHTML += `<h2>recordWin()</h2>`;
+
+        test('increments gamesWon', () => {
+            const s = makeStats();
+            s.recordWin({ moves: 40, timeSecs: 120, score: 480 });
+            assertEqual(s.get().gamesWon, 1);
+        });
+
+        test('increments currentStreak', () => {
+            const s = makeStats();
+            s.recordWin({ moves: 40, timeSecs: 120, score: 480 });
+            assertEqual(s.get().currentStreak, 1);
+        });
+
+        test('sets bestMoves on first win', () => {
+            const s = makeStats();
+            s.recordWin({ moves: 40, timeSecs: 120, score: 480 });
+            assertEqual(s.get().bestMoves, 40);
+        });
+
+        test('sets bestTime on first win', () => {
+            const s = makeStats();
+            s.recordWin({ moves: 40, timeSecs: 120, score: 480 });
+            assertEqual(s.get().bestTime, 120);
+        });
+
+        test('sets bestScore on first win', () => {
+            const s = makeStats();
+            s.recordWin({ moves: 40, timeSecs: 120, score: 480 });
+            assertEqual(s.get().bestScore, 480);
+        });
+
+        test('updates bestMoves when new moves is lower', () => {
+            const s = makeStats();
+            s.recordWin({ moves: 50, timeSecs: 120, score: 470 });
+            s.recordWin({ moves: 30, timeSecs: 100, score: 490 });
+            assertEqual(s.get().bestMoves, 30);
+        });
+
+        test('does not update bestMoves when new moves is higher', () => {
+            const s = makeStats();
+            s.recordWin({ moves: 30, timeSecs: 100, score: 490 });
+            s.recordWin({ moves: 50, timeSecs: 120, score: 470 });
+            assertEqual(s.get().bestMoves, 30);
+        });
+
+        test('updates bestTime when new time is lower', () => {
+            const s = makeStats();
+            s.recordWin({ moves: 40, timeSecs: 120, score: 480 });
+            s.recordWin({ moves: 40, timeSecs:  90, score: 480 });
+            assertEqual(s.get().bestTime, 90);
+        });
+
+        test('updates bestScore when new score is higher', () => {
+            const s = makeStats();
+            s.recordWin({ moves: 40, timeSecs: 120, score: 480 });
+            s.recordWin({ moves: 30, timeSecs: 100, score: 490 });
+            assertEqual(s.get().bestScore, 490);
+        });
+
+        test('does not update bestScore when new score is lower', () => {
+            const s = makeStats();
+            s.recordWin({ moves: 30, timeSecs: 100, score: 490 });
+            s.recordWin({ moves: 50, timeSecs: 120, score: 470 });
+            assertEqual(s.get().bestScore, 490);
+        });
+
+        test('accumulates totalMoves across wins', () => {
+            const s = makeStats();
+            s.recordWin({ moves: 40, timeSecs: 120, score: 480 });
+            s.recordWin({ moves: 30, timeSecs: 100, score: 490 });
+            assertEqual(s.get().totalMoves, 70);
+        });
+
+        test('accumulates totalTime across wins', () => {
+            const s = makeStats();
+            s.recordWin({ moves: 40, timeSecs: 120, score: 480 });
+            s.recordWin({ moves: 40, timeSecs:  90, score: 480 });
+            assertEqual(s.get().totalTime, 210);
+        });
+
+        test('accumulates totalScore across wins', () => {
+            const s = makeStats();
+            s.recordWin({ moves: 40, timeSecs: 120, score: 480 });
+            s.recordWin({ moves: 30, timeSecs: 100, score: 490 });
+            assertEqual(s.get().totalScore, 970);
+        });
+
+        test('updates bestStreak correctly', () => {
+            const s = makeStats();
+            s.recordWin({ moves: 40, timeSecs: 120, score: 480 });
+            s.recordWin({ moves: 40, timeSecs: 120, score: 480 });
+            assertEqual(s.get().bestStreak, 2);
+        });
+
+        test('bestStreak is preserved after streak is broken', () => {
+            const s = makeStats();
+            s.recordWin({ moves: 40, timeSecs: 120, score: 480 });
+            s.recordWin({ moves: 40, timeSecs: 120, score: 480 });
+            s.recordAbandoned(); // breaks streak
+            assertEqual(s.get().bestStreak, 2);
+            assertEqual(s.get().currentStreak, 0);
+        });
+
+        // ─── recordWin() return value ─────────────────────────────────────────────
+
+        results.innerHTML += `<h2>recordWin() new-best flags</h2>`;
+
+        test('all flags are true on first win', () => {
+            const s = makeStats();
+            const flags = s.recordWin({ moves: 40, timeSecs: 120, score: 480 });
+            assertEqual(flags.isNewBestMoves,  true);
+            assertEqual(flags.isNewBestTime,   true);
+            assertEqual(flags.isNewBestScore,  true);
+            assertEqual(flags.isNewBestStreak, true);
+        });
+
+        test('isNewBestMoves is true when moves improves', () => {
+            const s = makeStats();
+            s.recordWin({ moves: 50, timeSecs: 120, score: 470 });
+            const flags = s.recordWin({ moves: 30, timeSecs: 120, score: 470 });
+            assertEqual(flags.isNewBestMoves, true);
+        });
+
+        test('isNewBestMoves is false when moves does not improve', () => {
+            const s = makeStats();
+            s.recordWin({ moves: 30, timeSecs: 120, score: 490 });
+            const flags = s.recordWin({ moves: 50, timeSecs: 120, score: 470 });
+            assertEqual(flags.isNewBestMoves, false);
+        });
+
+        test('isNewBestScore is true when score improves', () => {
+            const s = makeStats();
+            s.recordWin({ moves: 50, timeSecs: 120, score: 470 });
+            const flags = s.recordWin({ moves: 30, timeSecs: 100, score: 490 });
+            assertEqual(flags.isNewBestScore, true);
+        });
+
+        test('isNewBestScore is false when score does not improve', () => {
+            const s = makeStats();
+            s.recordWin({ moves: 30, timeSecs: 100, score: 490 });
+            const flags = s.recordWin({ moves: 50, timeSecs: 120, score: 470 });
+            assertEqual(flags.isNewBestScore, false);
+        });
+
+        // ─── recordAbandoned() ────────────────────────────────────────────────────
+
+        results.innerHTML += `<h2>recordAbandoned()</h2>`;
+
+        test('resets currentStreak to 0', () => {
+            const s = makeStats();
+            s.recordWin({ moves: 40, timeSecs: 120, score: 480 });
+            s.recordAbandoned();
+            assertEqual(s.get().currentStreak, 0);
+        });
+
+        test('does not affect gamesPlayed or gamesWon', () => {
+            const s = makeStats();
+            s.recordStart();
+            s.recordWin({ moves: 40, timeSecs: 120, score: 480 });
+            s.recordAbandoned();
+            assertEqual(s.get().gamesPlayed, 1);
+            assertEqual(s.get().gamesWon, 1);
+        });
+
+        // ─── reset() ─────────────────────────────────────────────────────────────
+
+        results.innerHTML += `<h2>reset()</h2>`;
+
+        test('resets all stats to defaults', () => {
+            const s = makeStats();
+            s.recordStart();
+            s.recordWin({ moves: 40, timeSecs: 120, score: 480 });
+            s.reset();
+            assertEqual(s.get(), DEFAULTS);
+        });
+
+        test('persists reset to localStorage', () => {
+            const s = makeStats();
+            s.recordWin({ moves: 40, timeSecs: 120, score: 480 });
+            s.reset();
+            const reloaded = new StatsManager(new StorageManager(KEY), DEFAULTS);
+            assertEqual(reloaded.get(), DEFAULTS);
+        });
+
+        // ─── set() ───────────────────────────────────────────────────────────────
+
+        results.innerHTML += `<h2>set()</h2>`;
+
+        test('overwrites stats with provided object', () => {
+            const s = makeStats();
+            const custom = { ...DEFAULTS, gamesPlayed: 10, gamesWon: 7, bestStreak: 3 };
+            s.set(custom);
+            assertEqual(s.get().gamesPlayed, 10);
+            assertEqual(s.get().gamesWon, 7);
+            assertEqual(s.get().bestStreak, 3);
+        });
+
+        test('persists set() to localStorage', () => {
+            const s = makeStats();
+            const custom = { ...DEFAULTS, gamesPlayed: 10 };
+            s.set(custom);
+            const reloaded = new StatsManager(new StorageManager(KEY), DEFAULTS);
+            assertEqual(reloaded.get().gamesPlayed, 10);
+        });
+
+        // ─── isolation ───────────────────────────────────────────────────────────
+
+        results.innerHTML += `<h2>isolation</h2>`;
+
+        test('two instances with different keys do not share data', () => {
+            const KEY_A = 'test-stats-a';
+            const KEY_B = 'test-stats-b';
+            localStorage.removeItem(KEY_A);
+            localStorage.removeItem(KEY_B);
+
+            const a = new StatsManager(new StorageManager(KEY_A), DEFAULTS);
+            const b = new StatsManager(new StorageManager(KEY_B), DEFAULTS);
+
+            a.recordWin({ moves: 40, timeSecs: 120, score: 480 });
+
+            assertEqual(a.get().gamesWon, 1);
+            assertEqual(b.get().gamesWon, 0);
+
+            localStorage.removeItem(KEY_A);
+            localStorage.removeItem(KEY_B);
+        });
+
+        // ─── Clean up ─────────────────────────────────────────────────────────────
+        localStorage.removeItem(KEY);
+
+        // ─── Summary ─────────────────────────────────────────────────────────────
+        const summary = document.getElementById('summary');
+        const total = passed + failed;
+        summary.textContent = `${passed} / ${total} tests passed`;
+        summary.style.color = failed === 0 ? 'green' : 'red';
+    </script>
+</body>
+</html>

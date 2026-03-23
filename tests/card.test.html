@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>card tests</title>
+    <style>
+        body { font-family: monospace; padding: 1rem; }
+        .pass { color: green; }
+        .fail { color: red; font-weight: bold; }
+        h2    { margin-top: 1.5rem; }
+        #summary { margin-top: 1.5rem; font-size: 1.2rem; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <h1>card.js tests</h1>
+    <div id="results"></div>
+    <div id="summary"></div>
+
+    <script src="../js/card.js"></script>
+    <script>
+        const results = document.getElementById('results');
+        let passed = 0;
+        let failed = 0;
+
+        function test(description, fn) {
+            try {
+                fn();
+                results.innerHTML += `<p class="pass">✓ ${description}</p>`;
+                passed++;
+            } catch (e) {
+                results.innerHTML += `<p class="fail">✗ ${description}: ${e.message}</p>`;
+                failed++;
+            }
+        }
+
+        function assert(condition, message) {
+            if (!condition) throw new Error(message || 'Assertion failed');
+        }
+
+        function assertEqual(actual, expected, message) {
+            const a = JSON.stringify(actual);
+            const e = JSON.stringify(expected);
+            if (a !== e) throw new Error(message || `Expected ${e} but got ${a}`);
+        }
+
+        // ─── Constructor ──────────────────────────────────────────────────────────
+
+        results.innerHTML += `<h2>constructor</h2>`;
+
+        test('sets suit correctly', () => {
+            assertEqual(new Card('hearts', 'A').suit, 'hearts');
+        });
+
+        test('sets rank correctly', () => {
+            assertEqual(new Card('hearts', 'A').rank, 'A');
+        });
+
+        test('sets value correctly for Ace', () => {
+            assertEqual(new Card('hearts', 'A').value, 1);
+        });
+
+        test('sets value correctly for King', () => {
+            assertEqual(new Card('spades', 'K').value, 13);
+        });
+
+        test('sets color red for hearts', () => {
+            assertEqual(new Card('hearts', 'A').color, 'red');
+        });
+
+        test('sets color red for diamonds', () => {
+            assertEqual(new Card('diamonds', '5').color, 'red');
+        });
+
+        test('sets color black for clubs', () => {
+            assertEqual(new Card('clubs', '7').color, 'black');
+        });
+
+        test('sets color black for spades', () => {
+            assertEqual(new Card('spades', 'K').color, 'black');
+        });
+
+        // ─── ID generation ────────────────────────────────────────────────────────
+
+        results.innerHTML += `<h2>id generation</h2>`;
+
+        test('single deck id is suit-rank', () => {
+            assertEqual(new Card('hearts', 'A').id, 'hearts-A');
+        });
+
+        test('multi-deck id includes deck index', () => {
+            assertEqual(new Card('hearts', 'A', 0).id, 'hearts-A-0');
+            assertEqual(new Card('hearts', 'A', 1).id, 'hearts-A-1');
+        });
+
+        test('two Spider cards from different decks have unique ids', () => {
+            const c0 = new Card('hearts', 'A', 0);
+            const c1 = new Card('hearts', 'A', 1);
+            assert(c0.id !== c1.id, 'IDs should differ across deck indices');
+        });
+
+        test('deckIndex of 0 is not treated the same as omitting it', () => {
+            const withIndex    = new Card('hearts', 'A', 0).id;
+            const withoutIndex = new Card('hearts', 'A').id;
+            assert(withIndex !== withoutIndex, 'Should produce different IDs');
+        });
+
+        // ─── Card.getValue() ─────────────────────────────────────────────────────
+
+        results.innerHTML += `<h2>Card.getValue() — static</h2>`;
+
+        test('Ace = 1', ()  => assertEqual(Card.getValue('A'),  1));
+        test('2 = 2',   ()  => assertEqual(Card.getValue('2'),  2));
+        test('10 = 10', ()  => assertEqual(Card.getValue('10'), 10));
+        test('Jack = 11', () => assertEqual(Card.getValue('J'),  11));
+        test('Queen = 12', ()=> assertEqual(Card.getValue('Q'),  12));
+        test('King = 13', () => assertEqual(Card.getValue('K'),  13));
+
+        // ─── Card.getSuitSymbol() ─────────────────────────────────────────────────
+
+        results.innerHTML += `<h2>Card.getSuitSymbol() — static</h2>`;
+
+        test('hearts → ♥', ()   => assertEqual(Card.getSuitSymbol('hearts'),   '♥'));
+        test('diamonds → ♦', () => assertEqual(Card.getSuitSymbol('diamonds'), '♦'));
+        test('clubs → ♣', ()    => assertEqual(Card.getSuitSymbol('clubs'),    '♣'));
+        test('spades → ♠', ()   => assertEqual(Card.getSuitSymbol('spades'),   '♠'));
+
+        // ─── getSuitSymbol() instance ─────────────────────────────────────────────
+
+        results.innerHTML += `<h2>getSuitSymbol() — instance</h2>`;
+
+        test('instance getSuitSymbol() matches static for same suit', () => {
+            const card = new Card('hearts', 'A');
+            assertEqual(card.getSuitSymbol(), Card.getSuitSymbol('hearts'));
+        });
+
+        // ─── Card.SUITS / Card.RANKS ──────────────────────────────────────────────
+
+        results.innerHTML += `<h2>Card.SUITS / Card.RANKS</h2>`;
+
+        test('SUITS has 4 entries', () => assertEqual(Card.SUITS.length, 4));
+        test('RANKS has 13 entries', () => assertEqual(Card.RANKS.length, 13));
+        test('SUITS contains all four suits', () => {
+            ['hearts', 'diamonds', 'clubs', 'spades'].forEach(s => {
+                assert(Card.SUITS.includes(s), `Missing suit: ${s}`);
+            });
+        });
+        test('RANKS starts with A and ends with K', () => {
+            assertEqual(Card.RANKS[0],  'A');
+            assertEqual(Card.RANKS[12], 'K');
+        });
+        test('a full single deck has 52 cards', () => {
+            const count = Card.SUITS.length * Card.RANKS.length;
+            assertEqual(count, 52);
+        });
+        test('a full two-deck Spider game has 104 cards', () => {
+            const count = Card.SUITS.length * Card.RANKS.length * 2;
+            assertEqual(count, 104);
+        });
+
+        // ─── DOM element ──────────────────────────────────────────────────────────
+
+        results.innerHTML += `<h2>DOM element</h2>`;
+
+        test('element is a div', () => {
+            assertEqual(new Card('hearts', 'A').element.tagName, 'DIV');
+        });
+
+        test('element has card class', () => {
+            assert(new Card('hearts', 'A').element.classList.contains('card'));
+        });
+
+        test('element has color class', () => {
+            assert(new Card('hearts', 'A').element.classList.contains('red'));
+            assert(new Card('spades', 'K').element.classList.contains('black'));
+        });
+
+        test('element dataset matches card properties', () => {
+            const card = new Card('clubs', '10');
+            assertEqual(card.element.dataset.suit,  'clubs');
+            assertEqual(card.element.dataset.rank,  '10');
+            assertEqual(card.element.dataset.color, 'black');
+            assertEqual(card.element.dataset.cardId, 'clubs-10');
+        });
+
+        test('element has aria-label with rank and suit', () => {
+            const card = new Card('hearts', 'Q');
+            assertEqual(card.element.getAttribute('aria-label'), 'Q of hearts');
+        });
+
+        test('element.cardRef points back to the Card instance', () => {
+            const card = new Card('diamonds', '7');
+            assert(card.element.cardRef === card, 'cardRef should be the card itself');
+        });
+
+        test('element is created once and reused', () => {
+            const card = new Card('spades', 'J');
+            assert(card.element === card.element, 'element reference should be stable');
+        });
+
+        test('element contains rank and suit symbols in innerHTML', () => {
+            const card = new Card('hearts', 'A');
+            assert(card.element.innerHTML.includes('A'),   'Should include rank');
+            assert(card.element.innerHTML.includes('♥'),  'Should include suit symbol');
+        });
+
+        // ─── Summary ─────────────────────────────────────────────────────────────
+        const summary = document.getElementById('summary');
+        const total = passed + failed;
+        summary.textContent = `${passed} / ${total} tests passed`;
+        summary.style.color = failed === 0 ? 'green' : 'red';
+    </script>
+</body>
+</html>

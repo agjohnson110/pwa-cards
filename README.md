@@ -39,3 +39,25 @@ A Progressive Web App for installable, offline Freecell solitaire, optimized for
   - copy css
   - extract drag/drop handlers, animation code, column spacing, settings into a shared js
 - sudoku, with single cell super pencil, number selector with . indicator for remaining, and full color
+
+### Spider proposal
+shared/
+    StorageManager.js
+    SettingsManager.js
+    StatsManager.js
+    GameTimer.js
+    SettingsUI.js
+freecell/
+    index.html
+    manifest.json
+    sw.js
+    js/
+      app.js
+      settings-config.js
+spider/
+    index.html
+    manifest.json
+    sw.js
+    js/
+      app.js
+      settings-config.js

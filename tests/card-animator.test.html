@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>cardAnimator tests</title>
+    <style>
+        body { font-family: monospace; padding: 1rem; }
+        .pass { color: green; }
+        .fail { color: red; font-weight: bold; }
+        .info { color: #888; font-style: italic; }
+        h2    { margin-top: 1.5rem; }
+        #summary { margin-top: 1.5rem; font-size: 1.2rem; font-weight: bold; }
+
+        /* Test fixture — two positioned card elements side by side */
+        #fixture {
+            position: relative;
+            height: 120px;
+            margin-bottom: 1rem;
+            border: 1px dashed #ccc;
+        }
+        .test-card {
+            position: absolute;
+            width: 60px;
+            height: 90px;
+            background: white;
+            border: 1px solid #999;
+            top: 10px;
+        }
+        #card-a { left: 10px; }
+        #card-b { left: 100px; }
+    </style>
+</head>
+<body>
+    <h1>cardAnimator.js tests</h1>
+    <p class="info">Note: async tests wait for real animation frames and may take ~1 second.</p>
+
+    <!-- Test fixture: two card elements we can reposition and observe -->
+    <div id="fixture">
+        <div id="card-a" class="test-card">A</div>
+        <div id="card-b" class="test-card">B</div>
+    </div>
+
+    <div id="results"></div>
+    <div id="summary"></div>
+
+    <script src="../js/cardAnimator.js"></script>
+    <script>
+        const results = document.getElementById('results');
+        let passed = 0;
+        let failed = 0;
+
+        function test(description, fn) {
+            try {
+                fn();
+                results.innerHTML += `<p class="pass">✓ ${description}</p>`;
+                passed++;
+            } catch (e) {
+                results.innerHTML += `<p class="fail">✗ ${description}: ${e.message}</p>`;
+                failed++;
+            }
+        }
+
+        function testAsync(description, fn) {
+            return fn().then(() => {
+                results.innerHTML += `<p class="pass">✓ ${description}</p>`;
+                passed++;
+            }).catch(e => {
+                results.innerHTML += `<p class="fail">✗ ${description}: ${e.message}</p>`;
+                failed++;
+            });
+        }
+
+        function assert(condition, message) {
+            if (!condition) throw new Error(message || 'Assertion failed');
+        }
+
+        function assertEqual(actual, expected, message) {
+            const a = JSON.stringify(actual);
+            const e = JSON.stringify(expected);
+            if (a !== e) throw new Error(message || `Expected ${e} but got ${a}`);
+        }
+
+        function wait(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+
+        function resetCards() {
+            const a = document.getElementById('card-a');
+            const b = document.getElementById('card-b');
+            a.style.cssText = 'position:absolute; width:60px; height:90px; background:white; border:1px solid #999; top:10px; left:10px;';
+            b.style.cssText = 'position:absolute; width:60px; height:90px; background:white; border:1px solid #999; top:10px; left:100px;';
+            a.className = 'test-card';
+            b.className = 'test-card';
+        }
+
+        // ─── DURATION_MS ──────────────────────────────────────────────────────────
+
+        results.innerHTML += `<h2>CardAnimator.DURATION_MS</h2>`;
+
+        test('DURATION_MS is a positive number', () => {
+            assert(typeof CardAnimator.DURATION_MS === 'number', 'Should be a number');
+            assert(CardAnimator.DURATION_MS > 0, 'Should be positive');
+        });
+
+        test('DURATION_MS is 300', () => {
+            assertEqual(CardAnimator.DURATION_MS, 300);
+        });
+
+        // ─── animateCards() — synchronous observable state ────────────────────────
+
+        results.innerHTML += `<h2>animateCards() — initial state</h2>`;
+
+        test('sets transform on card that moved', () => {
+            resetCards();
+            const el = document.getElementById('card-a');
+            const fromRect = el.getBoundingClientRect();
+
+            // Move card in DOM
+            el.style.left = '200px';
+            const toRect = el.getBoundingClientRect();
+
+            // Fake fromRects (pre-move position) and current position
+            CardAnimator.animateCards([el], [fromRect]);
+
+            // Immediately after call, transform should be set to the delta
+            assert(el.style.transform !== '', 'transform should be set immediately');
+            resetCards();
+        });
+
+        test('skips transform when card position did not change', () => {
+            resetCards();
+            const el = document.getElementById('card-a');
+            const rect = el.getBoundingClientRect();
+
+            CardAnimator.animateCards([el], [rect]); // from = to (no movement)
+
+            assertEqual(el.style.transform, '', 'transform should remain empty if card did not move');
+            resetCards();
+        });
+
+        test('sets z-index on parent children when animating', () => {
+            resetCards();
+            const fixture = document.getElementById('fixture');
+            const el = document.getElementById('card-a');
+            const fromRect = el.getBoundingClientRect();
+
+            el.style.left = '200px';
+            CardAnimator.animateCards([el], [fromRect]);
+
+            // Parent children should have z-index set
+            const children = Array.from(fixture.children);
+            const hasZIndex = children.some(c => c.style.zIndex !== '');
+            assert(hasZIndex, 'At least one sibling should have z-index set');
+            resetCards();
+        });
+
+        // ─── animateSingleCard() — synchronous observable state ───────────────────
+
+        results.innerHTML += `<h2>animateSingleCard() — initial state</h2>`;
+
+        test('adds animating class immediately', () => {
+            resetCards();
+            const el = document.getElementById('card-b');
+            const fromRect = { left: 10, top: 10, width: 60, height: 90 };
+            const toRect   = { left: 100, top: 10, width: 60, height: 90 };
+
+            CardAnimator.animateSingleCard(el, fromRect, toRect);
+
+            assert(el.classList.contains('animating'), 'animating class should be added');
+            resetCards();
+        });
+
+        test('sets transform immediately when card moved', () => {
+            resetCards();
+            const el = document.getElementById('card-b');
+            const fromRect = { left: 10,  top: 10, width: 60, height: 90 };
+            const toRect   = { left: 100, top: 10, width: 60, height: 90 };
+
+            CardAnimator.animateSingleCard(el, fromRect, toRect);
+
+            assert(el.style.transform !== '', 'transform should be set');
+            resetCards();
+        });
+
+        test('does not add animating class when card did not move', () => {
+            resetCards();
+            const el = document.getElementById('card-b');
+            const rect = { left: 100, top: 10, width: 60, height: 90 };
+
+            CardAnimator.animateSingleCard(el, rect, rect); // from === to
+
+            assert(!el.classList.contains('animating'), 'animating class should not be added');
+            resetCards();
+        });
+
+        // ─── animateSingleCard() — async cleanup ──────────────────────────────────
+
+        results.innerHTML += `<h2>animateSingleCard() — async cleanup</h2>`;
+        results.innerHTML += `<p class="info">Waiting for animation frames...</p>`;
+
+        (async () => {
+            await testAsync('animating class is removed after transitionend', () => {
+                return new Promise((resolve, reject) => {
+                    resetCards();
+                    const el = document.getElementById('card-b');
+                    const fromRect = { left: 10,  top: 10, width: 60, height: 90 };
+                    const toRect   = { left: 100, top: 10, width: 60, height: 90 };
+
+                    CardAnimator.animateSingleCard(el, fromRect, toRect);
+
+                    // Manually fire transitionend since no CSS is loaded in test
+                    setTimeout(() => {
+                        el.dispatchEvent(new Event('transitionend'));
+                        try {
+                            assert(!el.classList.contains('animating'), 'animating should be removed after transitionend');
+                            resolve();
+                        } catch(e) {
+                            reject(e);
+                        }
+                        resetCards();
+                    }, 100);
+                });
+            });
+
+            await testAsync('transform is cleared after transitionend', () => {
+                return new Promise((resolve, reject) => {
+                    resetCards();
+                    const el = document.getElementById('card-b');
+                    const fromRect = { left: 10,  top: 10, width: 60, height: 90 };
+                    const toRect   = { left: 100, top: 10, width: 60, height: 90 };
+
+                    CardAnimator.animateSingleCard(el, fromRect, toRect);
+
+                    setTimeout(() => {
+                        el.dispatchEvent(new Event('transitionend'));
+                        try {
+                            assertEqual(el.style.transform, '', 'transform should be cleared');
+                            resolve();
+                        } catch(e) {
+                            reject(e);
+                        }
+                        resetCards();
+                    }, 100);
+                });
+            });
+
+            await testAsync('animateCards() clears z-index after timeout', () => {
+                return new Promise((resolve, reject) => {
+                    resetCards();
+                    const fixture = document.getElementById('fixture');
+                    const el = document.getElementById('card-a');
+                    const fromRect = el.getBoundingClientRect();
+                    el.style.left = '200px';
+
+                    CardAnimator.animateCards([el], [fromRect]);
+
+                    // Wait past DURATION_MS + 50ms buffer
+                    setTimeout(() => {
+                        const children = Array.from(fixture.children);
+                        const allCleared = children.every(c => c.style.zIndex === '');
+                        try {
+                            assert(allCleared, 'All z-index values should be cleared after timeout');
+                            resolve();
+                        } catch(e) {
+                            reject(e);
+                        }
+                        resetCards();
+                    }, CardAnimator.DURATION_MS + 100);
+                });
+            });
+
+            // ─── Summary ─────────────────────────────────────────────────────────
+            const summary = document.getElementById('summary');
+            const total = passed + failed;
+            summary.textContent = `${passed} / ${total} tests passed`;
+            summary.style.color = failed === 0 ? 'green' : 'red';
+        })();
+    </script>
+</body>
+</html>

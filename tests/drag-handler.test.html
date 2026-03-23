@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>dragHandler tests</title>
+    <style>
+        body { font-family: monospace; padding: 1rem; }
+        .pass { color: green; }
+        .fail { color: red; font-weight: bold; }
+        .info { color: #888; font-style: italic; }
+        h2    { margin-top: 1.5rem; }
+        #summary { margin-top: 1.5rem; font-size: 1.2rem; font-weight: bold; }
+
+        #fixture { position: relative; height: 150px; border: 1px dashed #ccc; margin-bottom: 1rem; }
+        .test-card {
+            position: absolute;
+            width: 60px; height: 90px;
+            background: white; border: 1px solid #333;
+            top: 10px;
+        }
+        #card-1 { left: 10px; }
+        #card-2 { left: 80px; }
+    </style>
+</head>
+<body>
+    <h1>dragHandler.js tests</h1>
+    <p class="info">DragHandler relies on DOM events and getBoundingClientRect — tests use synthetic events.</p>
+
+    <div id="fixture">
+        <div id="card-1" class="test-card card">A</div>
+        <div id="card-2" class="test-card card">B</div>
+    </div>
+
+    <div id="results"></div>
+    <div id="summary"></div>
+
+    <script src="../js/dragHandler.js"></script>
+    <script>
+        const results = document.getElementById('results');
+        let passed = 0;
+        let failed = 0;
+
+        function test(description, fn) {
+            try {
+                fn();
+                results.innerHTML += `<p class="pass">✓ ${description}</p>`;
+                passed++;
+            } catch (e) {
+                results.innerHTML += `<p class="fail">✗ ${description}: ${e.message}</p>`;
+                failed++;
+            }
+        }
+
+        function assert(condition, message) {
+            if (!condition) throw new Error(message || 'Assertion failed');
+        }
+
+        function assertEqual(actual, expected, message) {
+            const a = JSON.stringify(actual);
+            const e = JSON.stringify(expected);
+            if (a !== e) throw new Error(message || `Expected ${e} but got ${a}`);
+        }
+
+        // ─── Helpers ─────────────────────────────────────────────────────────────
+
+        // Builds a fresh DragHandler for each test.
+        // Card objects and cardRef are set fresh every time so there are
+        // no stale references across tests.
+        function makeHandler(overrides = {}) {
+            const el1 = document.getElementById('card-1');
+            const el2 = document.getElementById('card-2');
+
+            const card1 = { id: 'card-1', element: el1 };
+            const card2 = { id: 'card-2', element: el2 };
+            el1.cardRef = card1;
+            el2.cardRef = card2;
+
+            const pile = { type: 'column', arr: [card1, card2] };
+
+            const defaults = {
+                getCardFromElement: el => el.cardRef || null,
+                getPileForElement:  ()  => pile,
+                canPickUp:          ()  => true,
+                findBestTarget:     ()  => el2,
+                onDrop:             ()  => {},
+                onResize:           ()  => {},
+            };
+            return {
+                handler: new DragHandler({ ...defaults, ...overrides }),
+                card1,
+                card2,
+                pile,
+            };
+        }
+
+        // Dispatch on the element so e.target is set correctly —
+        // elementFromPoint() is unreliable in synthetic event tests.
+        // Events bubble up to document where the handler is registered.
+        function firePointerDown(el, x = 20, y = 20) {
+            const e = new PointerEvent('pointerdown', {
+                bubbles: true, clientX: x, clientY: y,
+                pointerType: 'mouse', isPrimary: true,
+            });
+            el.dispatchEvent(e);
+            return e;
+        }
+
+        function firePointerMove(x, y) {
+            const e = new PointerEvent('pointermove', {
+                bubbles: true, clientX: x, clientY: y,
+                pointerType: 'mouse',
+            });
+            document.dispatchEvent(e);
+        }
+
+        function firePointerUp(x, y) {
+            const e = new PointerEvent('pointerup', {
+                bubbles: true, clientX: x, clientY: y,
+                pointerType: 'mouse',
+            });
+            document.dispatchEvent(e);
+        }
+
+        function resetCards() {
+            ['card-1', 'card-2'].forEach(id => {
+                const el = document.getElementById(id);
+                el.style.cssText = '';
+                el.className = 'test-card card';
+                // cardRef is set fresh by makeHandler() — do not null it here
+            });
+        }
+
+        // ─── Constructor ─────────────────────────────────────────────────────────
+
+        results.innerHTML += `<h2>constructor</h2>`;
+
+        test('initialises with no dragged card', () => {
+            const { handler } = makeHandler();
+            assertEqual(handler.draggedCard, null);
+        });
+
+        test('initialises with empty dragged stack', () => {
+            const { handler } = makeHandler();
+            assertEqual(handler.draggedStack, []);
+        });
+
+        test('TAP_THRESHOLD defaults to 8', () => {
+            const { handler } = makeHandler();
+            assertEqual(handler.TAP_THRESHOLD, 8);
+        });
+
+        // ─── attach() / detach() ─────────────────────────────────────────────────
+
+        results.innerHTML += `<h2>attach() / detach()</h2>`;
+
+        test('attach() does not throw', () => {
+            const { handler } = makeHandler();
+            handler.attach();
+            handler.detach();
+            assert(true);
+        });
+
+        test('after detach(), pointer events no longer trigger pickup', () => {
+            resetCards();
+            let dropCalled = false;
+            const { handler } = makeHandler({ onDrop: () => { dropCalled = true; } });
+            handler.attach();
+            handler.detach();
+            firePointerDown(document.getElementById('card-1'), 15, 55);
+            firePointerUp(80, 55);
+            assert(!dropCalled, 'onDrop should not be called after detach');
+            resetCards();
+        });
+
+        // ─── canPickUp() hook ─────────────────────────────────────────────────────
+
+        results.innerHTML += `<h2>canPickUp() hook</h2>`;
+
+        test('canPickUp returning false prevents pickup', () => {
+            resetCards();
+            const { handler } = makeHandler({ canPickUp: () => false });
+            handler.attach();
+            firePointerDown(document.getElementById('card-1'), 15, 55);
+            assertEqual(handler.draggedCard, null, 'draggedCard should remain null');
+            handler.detach();
+            resetCards();
+        });
+
+        test('canPickUp returning true allows pickup', () => {
+            resetCards();
+            const { handler, card1 } = makeHandler({ canPickUp: () => true });
+            handler.attach();
+            firePointerDown(document.getElementById('card-1'), 15, 55);
+            assert(handler.draggedCard !== null, 'draggedCard should be set');
+            handler.detach();
+            resetCards();
+        });
+
+        // ─── drag vs tap detection ────────────────────────────────────────────────
+
+        results.innerHTML += `<h2>drag vs tap detection</h2>`;
+
+        test('movement within TAP_THRESHOLD is treated as tap', () => {
+            resetCards();
+            let wasDrag = null;
+            const { handler } = makeHandler({ onDrop: (el, isDrag) => { wasDrag = isDrag; } });
+            handler.attach();
+            firePointerDown(document.getElementById('card-1'), 15, 55);
+            firePointerMove(15 + 3, 55); // 3px — within TAP_THRESHOLD of 8
+            firePointerUp(15 + 3, 55);
+            assertEqual(wasDrag, false, 'Should be treated as a tap');
+            handler.detach();
+            resetCards();
+        });
+
+        test('movement beyond TAP_THRESHOLD is treated as drag', () => {
+            resetCards();
+            let wasDrag = null;
+            const { handler } = makeHandler({ onDrop: (el, isDrag) => { wasDrag = isDrag; } });
+            handler.attach();
+            firePointerDown(document.getElementById('card-1'), 15, 55);
+            firePointerMove(15 + 20, 55); // 20px — beyond TAP_THRESHOLD of 8
+            firePointerUp(15 + 20, 55);
+            assertEqual(wasDrag, true, 'Should be treated as a drag');
+            handler.detach();
+            resetCards();
+        });
+
+        // ─── onDrop() hook ────────────────────────────────────────────────────────
+
+        results.innerHTML += `<h2>onDrop() hook</h2>`;
+
+        test('onDrop is called after pointer up', () => {
+            resetCards();
+            let dropCalled = false;
+            const { handler } = makeHandler({ onDrop: () => { dropCalled = true; } });
+            handler.attach();
+            firePointerDown(document.getElementById('card-1'), 15, 55);
+            firePointerUp(80, 55);
+            assert(dropCalled, 'onDrop should be called');
+            handler.detach();
+            resetCards();
+        });
+
+        test('onDrop is not called if no card was picked up', () => {
+            resetCards();
+            let dropCalled = false;
+            const { handler } = makeHandler({
+                getCardFromElement: () => null, // nothing to pick up
+                onDrop: () => { dropCalled = true; }
+            });
+            handler.attach();
+            firePointerDown(document.getElementById('card-1'), 15, 55);
+            firePointerUp(80, 55);
+            assert(!dropCalled, 'onDrop should not be called if no card picked up');
+            handler.detach();
+            resetCards();
+        });
+
+        // ─── CSS state management ─────────────────────────────────────────────────
+
+        results.innerHTML += `<h2>CSS state management</h2>`;
+
+        test('adds dragging class to picked-up card', () => {
+            resetCards();
+            const el = document.getElementById('card-1');
+            const { handler } = makeHandler();
+            handler.attach();
+            firePointerDown(el, 15, 55);
+            assert(el.classList.contains('dragging'), 'dragging class should be added on pickup');
+            handler.detach();
+            resetCards();
+        });
+
+        test('removes dragging class after drop', () => {
+            resetCards();
+            const el = document.getElementById('card-1');
+            const { handler } = makeHandler();
+            handler.attach();
+            firePointerDown(el, 15, 55);
+            firePointerUp(80, 55);
+            assert(!el.classList.contains('dragging'), 'dragging class should be removed after drop');
+            handler.detach();
+            resetCards();
+        });
+
+        test('clears drag state after drop', () => {
+            resetCards();
+            const { handler } = makeHandler();
+            handler.attach();
+            firePointerDown(document.getElementById('card-1'), 15, 55);
+            firePointerUp(80, 55);
+            assertEqual(handler.draggedCard,  null, 'draggedCard should be null after drop');
+            assertEqual(handler.draggedStack, [],   'draggedStack should be empty after drop');
+            handler.detach();
+            resetCards();
+        });
+
+        // ─── onResize() hook ──────────────────────────────────────────────────────
+
+        results.innerHTML += `<h2>onResize() hook</h2>`;
+
+        test('onResize is called when window resizes', done => {
+            let resizeCalled = false;
+            const { handler } = makeHandler({ onResize: () => { resizeCalled = true; } });
+            handler.attach();
+            window.dispatchEvent(new Event('resize'));
+            // onResize fires after double-rAF, so check asynchronously
+            setTimeout(() => {
+                assert(resizeCalled, 'onResize should be called on window resize');
+                handler.detach();
+
+                // ─── Summary ─────────────────────────────────────────────────
+                const summary = document.getElementById('summary');
+                const total = passed + failed;
+                summary.textContent = `${passed} / ${total} tests passed`;
+                summary.style.color = failed === 0 ? 'green' : 'red';
+            }, 100);
+        });
+    </script>
+</body>
+</html>
