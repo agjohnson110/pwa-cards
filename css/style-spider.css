@@ -18,6 +18,8 @@ body {
     flex-direction: column;
     align-items: center;
     height: 100vh;
+    padding-top: env(safe-area-inset-top); /* iphone notch area */
+    box-sizing: border-box; /* include padding-top in total height */
 }
 
 #score-bar {
