@@ -2,7 +2,7 @@
 // Minimal bootstrap — wires up all shared classes.
 // Game logic (deck, deal, drag/drop, win) to be added later.
 
-const VERSION = '0.1.1';
+const VERSION = '0.1.2';
 
 class SpiderGame {
     constructor() {

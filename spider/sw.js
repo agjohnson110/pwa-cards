@@ -1,4 +1,4 @@
-const CACHE_NAME = 'spider-v0.1.1'; // bump this when deploying updates
+const CACHE_NAME = 'spider-v0.1.2'; // bump this when deploying updates
 
 const urlsToCache = [
     '/pwa-cards/spider/',

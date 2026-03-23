@@ -1,5 +1,5 @@
 html, body {
-    height: 100%; /*force fill full height*/
+    height: 100dvh; /*force fill full height*/
     overflow: hidden; /*prevents scrolling in main window*/
 }
 
@@ -17,7 +17,7 @@ body {
     display: flex;
     flex-direction: column;
     align-items: center;
-    height: 100vh;
+    height: 100dvh; /* dynamic height helps with rotation */
     padding-top: env(safe-area-inset-top); /* iphone notch area */
     box-sizing: border-box; /* include padding-top in total height */
 }
