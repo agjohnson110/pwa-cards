@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
     <title>Spider</title>
     <link rel="manifest" href="manifest.json">
-    <link rel="stylesheet" href="css/style-spider.css">
-    <link rel="stylesheet" href="css/settings.css">
+    <link rel="stylesheet" href="../css/style-spider.css">
+    <link rel="stylesheet" href="../css/settings.css">
     <meta name="theme-color" content="#008000">
 </head>
 <body>
@@ -63,8 +63,10 @@
         <div class="num" data-value="Q">Q</div>
         <div class="num" data-value="K">K</div>
     </div>
+
     <button class="top-button undo" data-action="undo" aria-label="Undo last move">↺</button>
     <button class="top-button settings" data-action="settings" aria-label="Open settings">⚙</button>
+    
     <div id="win-message" role="alert" aria-live="polite">You Win!</div>
     <div id="win-stats"></div>
     <button id="middle-btn-new-game">
@@ -73,16 +75,20 @@
     </button>
 
     <!-- Shared scripts -->
-    <script src="js/storageManager.js" defer></script>
-    <script src="js/gameTimer.js"      defer></script>
-    <script src="js/statsManager.js"   defer></script>
-    <script src="js/settingsManager.js" defer></script>
-    <script src="js/settingsUI.js"     defer></script>
+    <script src="../js/storageManager.js"  defer></script>
+    <script src="../js/gameTimer.js"       defer></script>
+    <script src="../js/statsManager.js"    defer></script>
+    <script src="../js/settingsManager.js" defer></script>
+    <script src="../js/settingsUI.js"      defer></script>
+    <script src="../js/card.js"            defer></script>
+    <script src="../js/cardAnimator.js"    defer></script>
+    <script src="../js/dragHandler.js"     defer></script>
+    <script src="../js/columnLayout.js"    defer></script>
 
     <!-- QR code library (local copy) -->
-    <script src="js/qrcode.min.js" defer></script>
+    <script src="../js/qrcode.min.js" defer></script>
 
     <!-- Game -->
-    <script src="js/appSpider.js" defer></script>
+    <script src="appSpider.js" defer></script>
 </body>
 </html>
