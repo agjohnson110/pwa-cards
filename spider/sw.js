@@ -1,4 +1,4 @@
-const CACHE_NAME = 'spider-v0.1.2'; // bump this when deploying updates
+const CACHE_NAME = 'spider-v0.1.3'; // bump this when deploying updates
 
 const urlsToCache = [
     '/pwa-cards/spider/',
@@ -45,25 +45,22 @@ self.addEventListener('activate', event => {
 });
 
 self.addEventListener('fetch', event => {
-    // Only handle GET requests — POST etc. always go to network
     if (event.request.method !== 'GET') return;
 
     event.respondWith(
-        caches.open(CACHE_NAME).then(cache =>
-            cache.match(event.request).then(cachedResponse => {
-                // Always try to fetch a fresh copy in the background
-                const networkFetch = fetch(event.request).then(networkResponse => {
-                    // Update the cache with the fresh response
-                    if (networkResponse.ok) {
-                        cache.put(event.request, networkResponse.clone());
-                    }
-                    return networkResponse;
-                }).catch(() => null); // network failed — that's OK, we have cache
-
-                // Return cached version immediately if available,
-                // otherwise wait for the network response
-                return cachedResponse || networkFetch;
+        fetch(event.request)
+            .then(networkResponse => {
+                // Got a fresh response — update cache and return it
+                if (networkResponse.ok) {
+                    caches.open(CACHE_NAME).then(cache =>
+                        cache.put(event.request, networkResponse.clone())
+                    );
+                }
+                return networkResponse;
             })
-        )
+            .catch(() => {
+                // Network failed — fall back to cache (offline support)
+                return caches.match(event.request);
+            })
     );
 });
