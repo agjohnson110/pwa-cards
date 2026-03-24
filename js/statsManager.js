@@ -49,7 +49,6 @@ class StatsManager {
 
     // Call when a new game starts.
     recordStart() {
-        this.data.gamesPlayed++;
         this.storage.save(this.data);
     }
 
@@ -61,6 +60,7 @@ class StatsManager {
     recordWin({ moves, timeSecs, score }) {
         const prev = this.get(); // snapshot before updating
 
+        this.data.gamesPlayed++;
         this.data.gamesWon++;
         this.data.currentStreak++;
         this.data.bestStreak = Math.max(this.data.bestStreak, this.data.currentStreak);
@@ -86,6 +86,7 @@ class StatsManager {
 
     // Call when a game is abandoned (new game, etc.)
     recordAbandoned() {
+        this.data.gamesPlayed++;
         this.data.currentStreak = 0;
         this.storage.save(this.data);
     }

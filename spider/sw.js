@@ -1,22 +1,22 @@
 const CACHE_NAME = 'spider-v0.1.3'; // bump this when deploying updates
 
 const urlsToCache = [
-    '/pwa-cards/spider/',
-    '/pwa-cards/spider/index.html',
-    '/pwa-cards/spider/manifest.json',
-    '/pwa-cards/spider/appSpider.js',
-    '/pwa-cards/css/settings.css',
-    '/pwa-cards/css/style.css',
-    '/pwa-cards/js/card.js',
-    '/pwa-cards/js/cardAnimator.js',
-    '/pwa-cards/js/columnLayout.js',
-    '/pwa-cards/js/dragHandler.js',
-    '/pwa-cards/js/gameTimer.js',
-    '/pwa-cards/js/qrcode.min.js',
-    '/pwa-cards/js/setingsManager.js',
-    '/pwa-cards/js/setingsUI.js',
-    '/pwa-cards/js/statsManager.js',
-    '/pwa-cards/js/storageManager.js'
+    './',
+    './index.html',
+    './manifest.json',
+    './appSpider.js',
+    '../css/settings.css',
+    '../css/style.css',
+    '../js/card.js',
+    '../js/cardAnimator.js',
+    '../js/columnLayout.js',
+    '../js/dragHandler.js',
+    '../js/gameTimer.js',
+    '../js/qrcode.min.js',
+    '../js/setingsManager.js',
+    '../js/setingsUI.js',
+    '../js/statsManager.js',
+    '../js/storageManager.js'
 ];
 
 self.addEventListener('install', event => {

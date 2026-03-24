@@ -37,7 +37,7 @@ class FreecellGame {
                 showTime:      'hide-time',
                 showNumberBar: 'hide-number-bar',
             },
-            () => this.updateSequenceOutlines() // freecell-specific onApply hook
+            () => this.updateSequenceOutlines() // onApply hook
         );
 
         // ─── Shared: Stats ───────────────────────────────────────────────────
@@ -343,7 +343,7 @@ class FreecellGame {
         document.querySelectorAll('.card').forEach(el => el.classList.remove('highlighted', 'dimmed'));
     }
 
-    // ─── Sequence outlines (Freecell-specific) ────────────────────────────────
+    // ─── Sequence outlines ────────────────────────────────
 
     updateSequenceOutlines() {
         document.querySelectorAll('.card.seq-top, .card.seq-mid, .card.seq-bot, .card.seq-solo')

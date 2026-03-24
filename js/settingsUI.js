@@ -301,7 +301,7 @@ class SettingsUI {
                 <div class="settings-text-body">
                     <h3>1. Discover in Browser</h3>
                     <p>Share this URL with anyone:</p>
-                    <div class="share-url">${window.location.origin}</div>
+                    <div class="share-url">${window.location.origin + window.location.pathname}</div>
                     <div id="qr-code"></div>
                     <h3>2. Add to Home Screen</h3>
                     <p><strong>iPhone / iPad:</strong> Tap the Share button (□↑) in Safari, then tap <em>Add to Home Screen</em>.</p>
@@ -388,7 +388,7 @@ class SettingsUI {
         const el = document.getElementById('qr-code');
         if (!el || el.childElementCount > 0) return; // only render once
         new QRCode(el, {
-            text:   window.location.origin,
+            text:   window.location.origin + window.location.pathname,
             width:  160,
             height: 160,
         });

@@ -1,6 +1,4 @@
 // Spider Solitaire
-// Minimal bootstrap — wires up all shared classes.
-// Game logic (deck, deal, drag/drop, win) to be added later.
 
 const VERSION = '0.1.3';
 
@@ -14,12 +12,12 @@ class SpiderGame {
         this.settings = new SettingsManager(
             this.settingsStorage,
             {
-                darkMode:      false,
                 showScore:     true,
                 showMoves:     true,
                 showTime:      true,
                 showNumberBar: true,
                 showGrouping:  true,
+                darkMode:      false,
                 difficulty:    1,    // 1 = one suit, 2 = two suits, 4 = four suits
             },
             {
@@ -28,7 +26,8 @@ class SpiderGame {
                 showMoves:     'hide-moves',
                 showTime:      'hide-time',
                 showNumberBar: 'hide-number-bar',
-            }
+            },
+            () => this.updateSequenceOutlines() // onApply hook
         );
 
         // ─── Shared: Stats ───────────────────────────────────────────────────
@@ -53,17 +52,25 @@ class SpiderGame {
             document.getElementById('timer').textContent = `Time: ${formatted}`;
         });
 
+        // ─── Shared: Column layout ───────────────────────────────────────────
+        this.layout = new ColumnLayout({
+            tableauId:    'tableau',
+            columnPrefix: 'col',
+            columnCount:  10,
+        });
+
         // ─── Shared: Settings UI ─────────────────────────────────────────────
         this.settingsUI = new SettingsUI({
             version:  VERSION,
             settings: this.settings,
             stats:    this.stats,
             toggles: [
-                { key: 'showScore',     label: 'Show Score'    },
-                { key: 'showMoves',     label: 'Show Moves'    },
-                { key: 'showTime',      label: 'Show Timer'    },
+                { key: 'showScore',     label: 'Show Score'      },
+                { key: 'showMoves',     label: 'Show Moves'      },
+                { key: 'showTime',      label: 'Show Timer'      },
                 { key: 'showNumberBar', label: 'Show Number Bar' },
-                { key: 'darkMode',      label: 'Dark Mode'     },
+                { key: 'showGrouping',  label: 'Highlight Grouped Cards' },
+                { key: 'darkMode',      label: 'Dark Mode'       },
             ],
             statFields: [
                 { key: 'gamesPlayed',   label: 'Games Played',   isTime: false },
@@ -83,77 +90,64 @@ class SpiderGame {
                 <h3>Tableau</h3>
                 <p>Cards are dealt into 10 columns. You can move a card onto any card that is one rank higher. You can only move a sequence of cards together if they are all the same suit.</p>
                 <h3>Stock</h3>
-                <p>When you run out of moves, click the stock to deal one card face-up onto each column. You must have at least one card in every column before dealing from the stock.</p>
+                <p>When you run out of moves, click the stock to deal one card face-up onto each column.</p>
                 <h3>Difficulty</h3>
-                <p><strong>One suit:</strong> All cards are spades — easiest.<br>
-                   <strong>Two suits:</strong> Cards are spades and hearts.<br>
-                   <strong>Four suits:</strong> All four suits — hardest.</p>
+                <p>One suit: All cards are spades — easiest.<br>
+                   Two suits: Cards are spades and hearts.<br>
+                   Four suits: All four suits — hardest.</p>
             `,
             onNewGame: () => {
-                this.stats.recordAbandoned();
-                this.resetGame();
+                this.settingsNewGame();
             },
             onRestart: () => {
-                this.restartGame();
+                this.settingsRestartGame();
             },
         });
 
         // ─── Init ────────────────────────────────────────────────────────────
-        this.moveCount  = 0;
-        this.gameActive = false;
-
         this.settings.apply();
         this.addEventListeners();
+        this.registerServiceWorker();
         this.startGame();
     }
 
     // ─── Game Lifecycle ───────────────────────────────────────────────────────
 
     startGame() {
-        this.moveCount  = 0;
         this.gameActive = true;
-
-        this.updateMovesAndScore();
-        this.stats.recordStart();
-        this.timer.start();
-
-        // TODO: create deck, shuffle, deal cards to tableau
-        console.log('Spider: game started');
-    }
-
-    resetGame() {
-        this.timer.stop();
-        this.gameActive = false;
         this.moveCount  = 0;
+        this.updateMovesAndScore();
+        //this.stats.recordStart(); //probably not needed
+        this.timer.start();
 
         document.getElementById('win-message').style.display         = 'none';
         document.getElementById('win-stats').style.display           = 'none';
         document.getElementById('middle-btn-new-game').style.display = 'none';
 
+        // ─── Game state ───────────────────────────────────────────────────────
+        this.deck        = [];
+        this.cardMap     = {};
+        this.stock       = [[], [], [], [], []]; // 5
+        this.foundations = [[], [], [], [], [], [], [], []]; // 8
+        this.tableau     = [[], [], [], [], [], [], [], [], [], []]; // 10
+        this.createDeck();
+        this.shuffleDeck();
+        this.dealCards();
+        this.renderDOM();
+        console.log('Spider: game started');
+    }
+
+    settingsNewGame() {
+        if (this.gameActive) this.stats.recordAbandoned();
         this.startGame();
     }
 
-    restartGame() {
-        // TODO: restore initial deal state from history
-        // For now, just reset to a new game
-        this.resetGame();
+    settingsRestartGame() {
+        // TODO just set board state to beginning
     }
-
-    // ─── Score / Moves ────────────────────────────────────────────────────────
-
-    updateMovesAndScore() {
-        document.getElementById('moves').textContent = `Moves: ${this.moveCount}`;
-        if (this.settings.get('showScore')) {
-            // Spider scoring: 500 - (moveCount * 1) as a simple placeholder
-            // TODO: replace with proper Spider scoring formula
-            const score = Math.max(0, 500 - this.moveCount);
-            document.getElementById('score').textContent = `Score: ${score}`;
-        }
-    }
-
-    // ─── Win ──────────────────────────────────────────────────────────────────
 
     showWinState() {
+        this.gameActive = false;
         const timeSecs   = this.timer.getElapsed();
         const finalScore = Math.max(0, 500 - this.moveCount);
 
@@ -193,6 +187,86 @@ class SpiderGame {
         document.getElementById('middle-btn-new-game').style.display = 'flex';
     }
 
+    // ─── Deck ─────────────────────────────────────────────────────────────────
+
+    createDeck() {
+        const suit = 'spades'; //currently just easy mode
+        for (let index = 0; index < 8; index++) {
+            for (const rank of Card.RANKS) {
+                const card = new Card(suit, rank, index);
+                this.deck.push(card);
+                this.cardMap[card.id] = card;
+            }
+        }
+    }
+
+    // Shuffle the deck using Fisher-Yates random algorithm
+    shuffleDeck() {
+        for (let i = this.deck.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [this.deck[i], this.deck[j]] = [this.deck[j], this.deck[i]];
+        }
+    }
+
+    dealCards() {
+        // to tableau
+        for (let col = 0; col < 10; col++) {
+            const numCards = col < 4 ? 6 : 5;
+            for (let i = 0; i < numCards; i++) {
+                this.tableau[col].push(this.deck.pop());
+            }
+        }
+
+        // to stock
+        for (let resupply = 0; resupply < 5; resupply++) {
+            this.stock[resupply].push(this.deck.pop());
+        }
+
+        this.deck = [];
+    }
+    
+    // ─── Rendering ────────────────────────────────────────────────────────────
+
+    renderDOM() {
+        for (let i = 0; i < 5; i++) {
+            const stock = document.getElementById(`stock${i + 1}`);
+            stock.innerHTML = '';
+            for (const card of this.stock[i]) stock.appendChild(card.element);
+        }
+        for (let i = 0; i < 8; i++) {
+            const found = document.getElementById(`found${i + 1}`);
+            found.innerHTML = '';
+            for (const card of this.foundations[i]) found.appendChild(card.element);
+        }
+        for (let i = 0; i < 10; i++) {
+            const col = document.getElementById(`col${i + 1}`);
+            col.innerHTML = '';
+            for (const card of this.tableau[i]) col.appendChild(card.element);
+        }
+
+        this.updateSequenceOutlines();
+
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                this.layout.adjust();
+            });
+        });
+    }
+
+    // ─── Score / Moves ────────────────────────────────────────────────────────
+
+    updateMovesAndScore() {
+        document.getElementById('moves').textContent = `Moves: ${this.moveCount}`;
+        if (this.settings.get('showScore')) {
+            // Spider scoring: 500 - (moveCount * 1) as a simple placeholder
+            // TODO: replace with proper Spider scoring formula
+            const score = Math.max(0, 500 - this.moveCount);
+            document.getElementById('score').textContent = `Score: ${score}`;
+        }
+    }
+
+
+    
     // ─── Event Listeners ──────────────────────────────────────────────────────
 
     addEventListeners() {
@@ -206,7 +280,7 @@ class SpiderGame {
         });
 
         document.getElementById('middle-btn-new-game').addEventListener('click', () => {
-            this.resetGame();
+            this.startGame();
         });
     }
 
@@ -217,11 +291,18 @@ class SpiderGame {
         console.log('Spider: undo');
     }
 
+    // ─── Sequence outlines ────────────────────────────────
+
+    updateSequenceOutlines() {
+        // TODO: implement sequence outlines
+        console.log('Spider: sequence');
+    }
+
     // ─── Service Worker ───────────────────────────────────────────────────────
 
     registerServiceWorker() {
         if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('/spider/sw.js')
+            navigator.serviceWorker.register('./sw.js')
                 .then(() => console.log('SW registered'))
                 .catch(() => console.log('SW registration failed'));
         }
