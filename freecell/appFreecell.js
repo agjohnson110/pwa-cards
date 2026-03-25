@@ -1,6 +1,6 @@
 // Freecell Game Logic
 
-const VERSION = '0.6.0';
+const VERSION = '0.6.1';
 
 class FreecellGame {
     constructor() {
@@ -75,13 +75,13 @@ class FreecellGame {
             settings: this.settings,
             stats:    this.stats,
             toggles: [
-                { key: 'showScore',     label: 'Show Score'                },
-                { key: 'showMoves',     label: 'Show Moves'                },
-                { key: 'showTime',      label: 'Show Timer'                },
-                { key: 'autoMove',      label: 'Auto-move to Foundation'   },
-                { key: 'showNumberBar', label: 'Show Number Bar'           },
-                { key: 'showGrouping',  label: 'Highlight Grouped Cards'   },
-                { key: 'darkMode',      label: 'Dark Mode'                 },
+                { key: 'showScore',     label: 'Show Score'              },
+                { key: 'showMoves',     label: 'Show Moves'              },
+                { key: 'showTime',      label: 'Show Timer'              },
+                { key: 'autoMove',      label: 'Auto-move to Foundation' },
+                { key: 'showNumberBar', label: 'Show Number Bar'         },
+                { key: 'showGrouping',  label: 'Highlight Grouped Cards' },
+                { key: 'darkMode',      label: 'Dark Mode'               },
             ],
             statFields: [
                 { key: 'gamesPlayed',   label: 'Games Played',   isTime: false },
@@ -155,6 +155,82 @@ class FreecellGame {
         this.timer.start();
     }
 
+    // ─── Reset / Restart ──────────────────────────────────────────────────────
+
+    restartGame() {
+        if (this.history.length === 0) return;
+
+        const initial    = this.history[0];
+        this.freeCells   = initial.freeCells.map(cell => [...cell]);
+        this.foundations = initial.foundations.map(f    => [...f]);
+        this.tableau     = initial.tableau.map(col      => [...col]);
+        this.history     = [];
+        this.moveCount   = 0;
+
+        this.timer.start();
+        this.renderDOM();
+        this.runAutoMoves();
+        this.updateMovesAndScore();
+    }
+
+    resetGame() {
+        this.timer.stop();
+        this.deck        = [];
+        this.cardMap     = {};
+        this.freeCells   = [[], [], [], []];
+        this.foundations = [[], [], [], []];
+        this.tableau     = [[], [], [], [], [], [], [], []];
+        this.draggedCard  = null;
+        this.draggedStack = [];
+        this.history     = [];
+        this.moveCount   = 0;
+        this.gameActive  = false;
+        this.init();
+    }
+
+    checkWin() {
+        return this.foundations.every(f => f.length === 13);
+    }
+
+    showWinState() {
+        const timeSecs   = this.timer.getElapsed();
+        const finalScore = 520 - this.moveCount;
+
+        this.timer.stop();
+
+        const flags = this.stats.recordWin({
+            moves:    this.moveCount,
+            timeSecs: timeSecs,
+            score:    finalScore,
+        });
+
+        const s = this.stats.get();
+
+        const row = (label, thisVal, bestVal, isBest) => `
+            <tr>
+                <td class="win-stat-label">${label}</td>
+                <td class="win-stat-this">${thisVal}</td>
+                <td class="win-stat-best ${isBest ? 'is-best' : ''}">${bestVal}${isBest ? ' ★' : ''}</td>
+            </tr>`;
+
+        document.getElementById('win-stats').innerHTML = `
+            <table>
+                <tr>
+                    <td class="win-stat-label"></td>
+                    <td class="win-stat-this"><u>This Game</u></td>
+                    <td class="win-stat-best"><u>Best</u></td>
+                </tr>
+                ${row('Time',   GameTimer.format(timeSecs), GameTimer.format(s.bestTime), flags.isNewBestTime)}
+                ${row('Score',  finalScore,        s.bestScore,     flags.isNewBestScore)}
+                ${row('Moves',  this.moveCount,    s.bestMoves,     flags.isNewBestMoves)}
+                ${row('Streak', s.currentStreak,   s.bestStreak,    flags.isNewBestStreak)}
+            </table>`;
+
+        document.getElementById('win-message').style.display         = 'block';
+        document.getElementById('win-stats').style.display           = 'block';
+        document.getElementById('middle-btn-new-game').style.display = 'flex';
+    }
+
     // ─── Deck ─────────────────────────────────────────────────────────────────
 
     createDeck() {
@@ -206,6 +282,7 @@ class FreecellGame {
         }
 
         this.updateSequenceOutlines();
+
         requestAnimationFrame(() => {
             requestAnimationFrame(() => {
                 this.layout.adjust();
@@ -219,172 +296,12 @@ class FreecellGame {
         this.runAutoMoves();
     }
 
-    // ─── Animation ────────────────────────────────────────────────────────────
-
+    // Animation
     animateCards(cardEls, fromRects) {
         CardAnimator.animateCards(cardEls, fromRects);
     }
 
-    // ─── History / Undo ───────────────────────────────────────────────────────
-
-    saveHistory() {
-        this.history.push({
-            freeCells:   this.freeCells.map(cell => [...cell]),
-            foundations: this.foundations.map(f    => [...f]),
-            tableau:     this.tableau.map(col      => [...col]),
-            movedIds:    this.draggedStack.map(c   => c.id),
-        });
-
-        // 5000 entries ≈ ~5MB max. Far exceeds any realistic game length (52 cards),
-        // while guarding against degenerate cases.
-        if (this.history.length > 5000) this.history.shift();
-    }
-
-    undo() {
-        if (this.draggedCard || this.history.length === 0) return;
-
-        const entry = this.history.pop();
-
-        // Find cards that were auto-moved to foundations after the last player move.
-        // These are cards present in the current foundations but absent in the snapshot.
-        const autoMovedIds = [];
-        for (let i = 0; i < 4; i++) {
-            const savedLen   = entry.foundations[i].length;
-            const currentLen = this.foundations[i].length;
-            for (let j = savedLen; j < currentLen; j++) {
-                autoMovedIds.push(this.foundations[i][j].id);
-            }
-        }
-
-        // Animate both the manually moved cards and any auto-moved cards
-        const allMovedIds = [...new Set([...entry.movedIds, ...autoMovedIds])];
-        const cardEls     = allMovedIds.map(id => this.cardMap[id].element);
-        const fromRects   = cardEls.map(el => el.getBoundingClientRect());
-
-        // Restore model
-        this.freeCells   = entry.freeCells;
-        this.foundations = entry.foundations;
-        this.tableau     = entry.tableau;
-
-        // Sync DOM to restored state WITHOUT triggering new auto-moves
-        this.renderDOM();
-        CardAnimator.animateCards(cardEls, fromRects);
-    }
-
-    // ─── Event Listeners ──────────────────────────────────────────────────────
-
-    addEventListeners() {
-        this.dragHandler.attach();
-
-        document.addEventListener('click', e => {
-            const button = e.target.closest('.top-button');
-            if (!button) return;
-            switch (button.dataset.action) {
-                case 'undo':     this.undo();             break;
-                case 'settings': this.settingsUI.open();  break;
-            }
-        });
-
-        document.getElementById('middle-btn-new-game').addEventListener('click', () => {
-            this.resetGame();
-        });
-
-        // Number bar highlight
-        const numBar = document.querySelector('.number-bar');
-
-        numBar.addEventListener('touchstart', e => {
-            const num = e.target.closest('.num');
-            if (!num) return;
-            e.preventDefault(); // prevent the touch from also firing a click
-            this.highlightCards(num.dataset.value);
-        }, { passive: false });
-
-        numBar.addEventListener('touchend', () => this.clearHighlight());
-
-        numBar.addEventListener('pointerdown', e => {
-            if (e.pointerType === 'touch') return;
-            const num = e.target.closest('.num');
-            if (!num) return;
-            this.highlightCards(num.dataset.value);
-        });
-
-        numBar.addEventListener('pointerup',    e => { if (e.pointerType !== 'touch') this.clearHighlight(); });
-        numBar.addEventListener('pointerleave', e => { if (e.pointerType !== 'touch') this.clearHighlight(); });
-    }
-
-    // ─── Card Highlight ───────────────────────────────────────────────────────
-
-    highlightCards(value) {
-        const toHighlight = new Set();
-
-        if (Card.SUITS.includes(value)) {
-            const foundationPile  = this.foundations.find(f => f.length > 0 && f[0].suit === value);
-            const foundationCount = foundationPile ? foundationPile.length : 0;
-            const nextValues      = [foundationCount + 1, foundationCount + 2, foundationCount + 3]
-                .filter(v => v <= 13);
-            nextValues.forEach(v => {
-                const card = Object.values(this.cardMap).find(c => c.suit === value && c.value === v);
-                if (card) toHighlight.add(card.id);
-            });
-        }
-
-        document.querySelectorAll('.card').forEach(el => {
-            const card = el?.cardRef || null;
-            if (!card) return;
-            const matches = Card.SUITS.includes(value)
-                ? toHighlight.has(card.id)
-                : card.rank === value;
-            el.classList.toggle('highlighted', matches);
-            el.classList.toggle('dimmed',      !matches);
-        });
-    }
-
-    clearHighlight() {
-        document.querySelectorAll('.card').forEach(el => el.classList.remove('highlighted', 'dimmed'));
-    }
-
-    // ─── Sequence outlines ────────────────────────────────
-
-    updateSequenceOutlines() {
-        document.querySelectorAll('.card.seq-top, .card.seq-mid, .card.seq-bot, .card.seq-solo')
-            .forEach(el => el.classList.remove('seq-top', 'seq-mid', 'seq-bot', 'seq-solo'));
-
-        if (!this.settings.get('showGrouping')) return;
-
-        for (let i = 0; i < 8; i++) {
-            const col = this.tableau[i];
-            if (col.length === 0) continue;
-
-            // Find all sequence boundaries in this column.
-            // A sequence break occurs when the next card is NOT the correct alternating color
-            // and descending rank from the current card.
-            const breaksBefore = new Set(); // indices where a new sequence starts
-            breaksBefore.add(0);            // first card always starts a sequence
-
-            for (let j = 0; j < col.length - 1; j++) {
-                const curr = col[j];
-                const next = col[j + 1];
-                const isSequence = next.color !== curr.color && next.value === curr.value - 1;
-                if (!isSequence) breaksBefore.add(j + 1);
-            }
-
-            // Now assign classes based on where sequences start and end
-            for (let j = 0; j < col.length; j++) {
-                const isStart = breaksBefore.has(j);
-                const isEnd   = breaksBefore.has(j + 1) || j === col.length - 1;
-
-                let cls;
-                if      ( isStart &&  isEnd) cls = null;
-                else if ( isStart && !isEnd) cls = 'seq-top';
-                else if (!isStart &&  isEnd) cls = 'seq-bot';
-                else                         cls = 'seq-mid';
-
-                if (cls) col[j].element.classList.add(cls);
-            }
-        }
-    }
-
-    // ─── Helpers ──────────────────────────────────────────────────────────────
+    // ─── Card Movement and Logic ──────────────────────────────────────────────────────────────
 
     // Returns { type, index, arr } for a pile container element.
     // Reads data-pile-type and data-pile-index attributes set in HTML.
@@ -402,8 +319,7 @@ class FreecellGame {
         }
     }
 
-    // ─── Move Logic ───────────────────────────────────────────────────────────
-
+    // Don't start moving a card/stack that is trapped
     preMoveCheckFailed() {
         for (let i = 0; i < this.draggedStack.length - 1; i++) {
             const curr = this.draggedStack[i];
@@ -619,6 +535,163 @@ class FreecellGame {
         }
     }
 
+    // ─── Event Listeners ──────────────────────────────────────────────────────
+
+    addEventListeners() {
+        this.dragHandler.attach();
+
+        document.addEventListener('click', e => {
+            const button = e.target.closest('.top-button');
+            if (!button) return;
+            switch (button.dataset.action) {
+                case 'undo':     this.undo();             break;
+                case 'settings': this.settingsUI.open();  break;
+            }
+        });
+
+        document.getElementById('middle-btn-new-game').addEventListener('click', () => {
+            this.resetGame();
+        });
+
+        // Number bar highlight
+        const numBar = document.querySelector('.number-bar');
+
+        numBar.addEventListener('touchstart', e => {
+            const num = e.target.closest('.num');
+            if (!num) return;
+            e.preventDefault(); // prevent the touch from also firing a click
+            this.highlightCards(num.dataset.value);
+        }, { passive: false });
+
+        numBar.addEventListener('touchend', () => this.clearHighlight());
+
+        numBar.addEventListener('pointerdown', e => {
+            if (e.pointerType === 'touch') return;
+            const num = e.target.closest('.num');
+            if (!num) return;
+            this.highlightCards(num.dataset.value);
+        });
+
+        numBar.addEventListener('pointerup',    e => { if (e.pointerType !== 'touch') this.clearHighlight(); });
+        numBar.addEventListener('pointerleave', e => { if (e.pointerType !== 'touch') this.clearHighlight(); });
+    }
+
+    // ─── Card Highlight and Sequence ───────────────────────────────────────────────────────
+
+    highlightCards(value) {
+        const toHighlight = new Set();
+
+        if (Card.SUITS.includes(value)) {
+            const foundationPile  = this.foundations.find(f => f.length > 0 && f[0].suit === value);
+            const foundationCount = foundationPile ? foundationPile.length : 0;
+            const nextValues      = [foundationCount + 1, foundationCount + 2, foundationCount + 3]
+                .filter(v => v <= 13);
+            nextValues.forEach(v => {
+                const card = Object.values(this.cardMap).find(c => c.suit === value && c.value === v);
+                if (card) toHighlight.add(card.id);
+            });
+        }
+
+        document.querySelectorAll('.card').forEach(el => {
+            const card = el?.cardRef || null;
+            if (!card) return;
+            const matches = Card.SUITS.includes(value)
+                ? toHighlight.has(card.id)
+                : card.rank === value;
+            el.classList.toggle('highlighted', matches);
+            el.classList.toggle('dimmed',      !matches);
+        });
+    }
+
+    clearHighlight() {
+        document.querySelectorAll('.card').forEach(el => el.classList.remove('highlighted', 'dimmed'));
+    }
+
+    updateSequenceOutlines() {
+        document.querySelectorAll('.card.seq-top, .card.seq-mid, .card.seq-bot')
+            .forEach(el => el.classList.remove('seq-top', 'seq-mid', 'seq-bot'));
+
+        if (!this.settings.get('showGrouping')) return;
+
+        for (let i = 0; i < 8; i++) {
+            const col = this.tableau[i];
+            if (col.length === 0) continue;
+
+            // Find all sequence boundaries in this column.
+            // A sequence break occurs when the next card is NOT the correct alternating color
+            // and descending rank from the current card.
+            const breaksBefore = new Set(); // indices where a new sequence starts
+            breaksBefore.add(0);            // first card always starts a sequence
+
+            for (let j = 0; j < col.length - 1; j++) {
+                const curr = col[j];
+                const next = col[j + 1];
+                const isSequence = next.color !== curr.color && next.value === curr.value - 1;
+                if (!isSequence) breaksBefore.add(j + 1);
+            }
+
+            // Now assign classes based on where sequences start and end
+            for (let j = 0; j < col.length; j++) {
+                const isStart = breaksBefore.has(j);
+                const isEnd   = breaksBefore.has(j + 1) || j === col.length - 1;
+
+                let cls;
+                if      ( isStart &&  isEnd) cls = null;
+                else if ( isStart && !isEnd) cls = 'seq-top';
+                else if (!isStart &&  isEnd) cls = 'seq-bot';
+                else                         cls = 'seq-mid';
+
+                if (cls) col[j].element.classList.add(cls);
+            }
+        }
+    }
+
+    // ─── History / Undo ───────────────────────────────────────────────────────
+
+    saveHistory() {
+        this.history.push({
+            freeCells:   this.freeCells.map(cell => [...cell]),
+            foundations: this.foundations.map(f    => [...f]),
+            tableau:     this.tableau.map(col      => [...col]),
+            movedIds:    this.draggedStack.map(c   => c.id),
+        });
+
+        // 5000 entries ≈ ~5MB max. Far exceeds any realistic game length (52 cards),
+        // while guarding against degenerate cases.
+        if (this.history.length > 5000) this.history.shift();
+    }
+
+    undo() {
+        if (this.draggedCard || this.history.length === 0) return;
+
+        const entry = this.history.pop();
+
+        // Find cards that were auto-moved to foundations after the last player move.
+        // These are cards present in the current foundations but absent in the snapshot.
+        const autoMovedIds = [];
+        for (let i = 0; i < 4; i++) {
+            const savedLen   = entry.foundations[i].length;
+            const currentLen = this.foundations[i].length;
+            for (let j = savedLen; j < currentLen; j++) {
+                autoMovedIds.push(this.foundations[i][j].id);
+            }
+        }
+
+        // Animate both the manually moved cards and any auto-moved cards
+        const allMovedIds = [...new Set([...entry.movedIds, ...autoMovedIds])];
+        const cardEls     = allMovedIds.map(id => this.cardMap[id].element);
+        const fromRects   = cardEls.map(el => el.getBoundingClientRect());
+
+        // Restore model
+        this.freeCells   = entry.freeCells;
+        this.foundations = entry.foundations;
+        this.tableau     = entry.tableau;
+
+        // Sync DOM to restored state WITHOUT triggering new auto-moves
+        this.renderDOM();
+        CardAnimator.animateCards(cardEls, fromRects);
+    }
+
     // ─── Score / Moves ────────────────────────────────────────────────────────
 
     updateMovesAndScore() {
@@ -631,98 +704,11 @@ class FreecellGame {
         }
     }
 
-    checkWin() {
-        return this.foundations.every(f => f.length === 13);
-    }
-
-    showWinState() {
-        const timeSecs   = this.timer.getElapsed();
-        const finalScore = 520 - this.moveCount;
-
-        this.timer.stop();
-
-        const flags = this.stats.recordWin({
-            moves:    this.moveCount,
-            timeSecs: timeSecs,
-            score:    finalScore,
-        });
-
-        const s   = this.stats.get();
-        const fmt = secs => GameTimer.format(secs);
-
-        const row = (label, thisVal, bestVal, isBest) => `
-            <tr>
-                <td class="win-stat-label">${label}</td>
-                <td class="win-stat-this">${thisVal}</td>
-                <td class="win-stat-best ${isBest ? 'is-best' : ''}">${bestVal}${isBest ? ' ★' : ''}</td>
-            </tr>`;
-
-        document.getElementById('win-stats').innerHTML = `
-            <table>
-                <tr>
-                    <td class="win-stat-label"></td>
-                    <td class="win-stat-this"><u>This Game</u></td>
-                    <td class="win-stat-best"><u>Best</u></td>
-                </tr>
-                ${row('Time',   fmt(timeSecs),     fmt(s.bestTime),     flags.isNewBestTime)}
-                ${row('Score',  finalScore,         s.bestScore,         flags.isNewBestScore)}
-                ${row('Moves',  this.moveCount,     s.bestMoves,         flags.isNewBestMoves)}
-                ${row('Streak', s.currentStreak,    s.bestStreak,        flags.isNewBestStreak)}
-            </table>`;
-
-        document.getElementById('win-message').style.display         = 'block';
-        document.getElementById('win-stats').style.display           = 'block';
-        document.getElementById('middle-btn-new-game').style.display = 'flex';
-    }
-
-    // ─── Reset / Restart ──────────────────────────────────────────────────────
-
-    restartGame() {
-        if (this.history.length === 0) return;
-
-        const initial    = this.history[0];
-        this.freeCells   = initial.freeCells.map(cell => [...cell]);
-        this.foundations = initial.foundations.map(f    => [...f]);
-        this.tableau     = initial.tableau.map(col      => [...col]);
-        this.history     = [];
-        this.moveCount   = 0;
-
-        this.timer.start();
-        this.renderDOM();
-        this.runAutoMoves();
-        this.updateMovesAndScore();
-    }
-
-    resetGame() {
-        this.timer.stop();
-        this.deck        = [];
-        this.cardMap     = {};
-        this.freeCells   = [[], [], [], []];
-        this.foundations = [[], [], [], []];
-        this.tableau     = [[], [], [], [], [], [], [], []];
-        this.draggedCard  = null;
-        this.draggedStack = [];
-        this.history     = [];
-        this.moveCount   = 0;
-        this.gameActive  = false;
-        this.init();
-    }
-
-    clearCacheAndReset() {
-        if ('caches' in window) {
-            caches.keys().then(names => names.forEach(name => caches.delete(name)));
-        }
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.getRegistrations().then(regs => regs.forEach(r => r.unregister()));
-        }
-        this.resetGame();
-    }
-
     // ─── Service Worker ───────────────────────────────────────────────────────
 
     registerServiceWorker() {
         if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('/sw.js')
+            navigator.serviceWorker.register('./sw.js')
                 .then(() => console.log('SW registered'))
                 .catch(() => console.log('SW registration failed'));
         }

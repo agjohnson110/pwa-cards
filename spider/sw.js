@@ -1,4 +1,4 @@
-const CACHE_NAME = 'spider-v0.1.3'; // bump this when deploying updates
+const CACHE_NAME = 'spider-v0.2.0'; // bump this when deploying updates
 
 const urlsToCache = [
     './',
@@ -6,15 +6,16 @@ const urlsToCache = [
     './manifest.json',
     './appSpider.js',
     '../css/settings.css',
-    '../css/style.css',
+    '../css/style-card.css',
+    '../css/style-spider.css',
     '../js/card.js',
     '../js/cardAnimator.js',
     '../js/columnLayout.js',
     '../js/dragHandler.js',
     '../js/gameTimer.js',
     '../js/qrcode.min.js',
-    '../js/setingsManager.js',
-    '../js/setingsUI.js',
+    '../js/settingsManager.js',
+    '../js/settingsUI.js',
     '../js/statsManager.js',
     '../js/storageManager.js'
 ];
@@ -44,7 +45,9 @@ self.addEventListener('activate', event => {
     );
 });
 
+// Network-first with cache fallback - latest even without version updates
 self.addEventListener('fetch', event => {
+    // Only handle GET requests — POST etc. always go to network
     if (event.request.method !== 'GET') return;
 
     event.respondWith(

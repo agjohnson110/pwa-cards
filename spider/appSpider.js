@@ -1,9 +1,19 @@
 // Spider Solitaire
 
-const VERSION = '0.1.3';
+const VERSION = '0.2.0';
 
 class SpiderGame {
     constructor() {
+        // ─── Game state ───────────────────────────────────────────────────────
+        this.deck        = [];
+        this.cardMap     = {};
+        this.stock       = [[], [], [], [], []]; // 5
+        this.foundations = [[], [], [], [], [], [], [], []]; // 8
+        this.tableau     = [[], [], [], [], [], [], [], [], [], []]; // 10
+        this.history     = [];
+        this.moveCount   = 0;
+        this.gameActive  = false;
+
         // ─── Shared: Storage ─────────────────────────────────────────────────
         this.settingsStorage = new StorageManager('spider-settings');
         this.statsStorage    = new StorageManager('spider-stats');
@@ -65,12 +75,12 @@ class SpiderGame {
             settings: this.settings,
             stats:    this.stats,
             toggles: [
-                { key: 'showScore',     label: 'Show Score'      },
-                { key: 'showMoves',     label: 'Show Moves'      },
-                { key: 'showTime',      label: 'Show Timer'      },
-                { key: 'showNumberBar', label: 'Show Number Bar' },
+                { key: 'showScore',     label: 'Show Score'              },
+                { key: 'showMoves',     label: 'Show Moves'              },
+                { key: 'showTime',      label: 'Show Timer'              },
+                { key: 'showNumberBar', label: 'Show Number Bar'         },
                 { key: 'showGrouping',  label: 'Highlight Grouped Cards' },
-                { key: 'darkMode',      label: 'Dark Mode'       },
+                { key: 'darkMode',      label: 'Dark Mode'               },
             ],
             statFields: [
                 { key: 'gamesPlayed',   label: 'Games Played',   isTime: false },
@@ -104,6 +114,21 @@ class SpiderGame {
             },
         });
 
+        // ─── Shared: Drag handler ────────────────────────────────────────────
+        this.dragHandler = new DragHandler({
+            getCardFromElement: el => el?.cardRef || null,
+            getPileForElement:  el => this.getPileForElement(el),
+            canPickUp: (card, stack) => {
+                // Keep game state in sync so preMoveCheckFailed() can read it
+                this.draggedCard  = card;
+                this.draggedStack = stack;
+                return !this.preMoveCheckFailed();
+            },
+            findBestTarget: () => this.findBestTarget(),
+            onDrop:   (targetEl, isDrag) => this.attemptMove(targetEl, isDrag),
+            onResize: () => this.layout.adjust(),
+        });
+
         // ─── Init ────────────────────────────────────────────────────────────
         this.settings.apply();
         this.addEventListeners();
@@ -124,12 +149,13 @@ class SpiderGame {
         document.getElementById('win-stats').style.display           = 'none';
         document.getElementById('middle-btn-new-game').style.display = 'none';
 
-        // ─── Game state ───────────────────────────────────────────────────────
+        // ─── Game state reset ───────────────────────────────────────────────────────
         this.deck        = [];
         this.cardMap     = {};
         this.stock       = [[], [], [], [], []]; // 5
         this.foundations = [[], [], [], [], [], [], [], []]; // 8
         this.tableau     = [[], [], [], [], [], [], [], [], [], []]; // 10
+        this.history     = [];
         this.createDeck();
         this.shuffleDeck();
         this.dealCards();
@@ -143,7 +169,11 @@ class SpiderGame {
     }
 
     settingsRestartGame() {
-        // TODO just set board state to beginning
+        // TODO just set board state to beginning - need history
+    }
+
+    checkWin() {
+        return this.foundations.every(f => f.length === 13);
     }
 
     showWinState() {
@@ -159,8 +189,7 @@ class SpiderGame {
             score:    finalScore,
         });
 
-        const fmt = s => GameTimer.format(s);
-        const s   = this.stats.get();
+        const s = this.stats.get();
 
         const row = (label, thisVal, bestVal, isBest) => `
             <tr>
@@ -176,10 +205,10 @@ class SpiderGame {
                     <td class="win-stat-this"><u>This Game</u></td>
                     <td class="win-stat-best"><u>Best</u></td>
                 </tr>
-                ${row('Time',   fmt(timeSecs),    fmt(s.bestTime),        flags.isNewBestTime)}
-                ${row('Score',  finalScore,        s.bestScore,            flags.isNewBestScore)}
-                ${row('Moves',  this.moveCount,    s.bestMoves,            flags.isNewBestMoves)}
-                ${row('Streak', s.currentStreak,   s.bestStreak,           flags.isNewBestStreak)}
+                ${row('Time',   GameTimer.format(timeSecs), GameTimer.format(s.bestTime), flags.isNewBestTime)}
+                ${row('Score',  finalScore,        s.bestScore,     flags.isNewBestScore)}
+                ${row('Moves',  this.moveCount,    s.bestMoves,     flags.isNewBestMoves)}
+                ${row('Streak', s.currentStreak,   s.bestStreak,    flags.isNewBestStreak)}
             </table>`;
 
         document.getElementById('win-message').style.display         = 'block';
@@ -224,9 +253,10 @@ class SpiderGame {
 
         this.deck = [];
     }
-    
+
     // ─── Rendering ────────────────────────────────────────────────────────────
 
+    // Pure DOM sync — does not trigger auto-moves.
     renderDOM() {
         for (let i = 0; i < 5; i++) {
             const stock = document.getElementById(`stock${i + 1}`);
@@ -253,6 +283,285 @@ class SpiderGame {
         });
     }
 
+    // Full render: syncs DOM then runs animated auto-moves.
+    render() {
+        this.renderDOM();
+        this.runAutoMoves();
+    }
+
+    // Animation
+    animateCards(cardEls, fromRects) {
+        CardAnimator.animateCards(cardEls, fromRects);
+    }
+
+    // ─── Card Movement and Logic ──────────────────────────────────────────────────────────────
+
+    // Returns { type, index, arr } for a pile container element.
+    // Reads data-pile-type and data-pile-index attributes set in HTML.
+    // Kept separate from CSS classes since classes are for styling and may change.
+    getPileForElement(containerEl) {
+        if (!containerEl) return null;
+        const type  = containerEl.dataset.pileType; // dataset.pileType comes from data-pile-type in html. Separate from class since class is used for styling and may have multiple values, while data-pile-type is strictly for identifying the type of pile.
+        const index = parseInt(containerEl.dataset.pileIndex, 10);
+        if (isNaN(index) || !type) return null; // element isn't a pile container
+        switch (type) {
+            case 'stock':      return { type, index, arr: this.stock[index] }; //property name can automatch variable name (type: type)
+            case 'foundation': return { type, index, arr: this.foundations[index] };
+            case 'column':     return { type, index, arr: this.tableau[index] };
+            default:           return null;
+        }
+    }
+
+    // Don't start moving a card/stack that is trapped
+    preMoveCheckFailed() {
+        for (let i = 0; i < this.draggedStack.length - 1; i++) {
+            const curr = this.draggedStack[i];
+            const next = this.draggedStack[i + 1];
+            if (next.color !== curr.color)     return true; // different color — not a valid sequence
+            if (next.value !== curr.value - 1) return true; // not descending — not a valid sequence
+        }
+        return false;
+    }
+
+    // Finds the best destination for a tap move using model-based priority ordering.
+    findBestTarget() {
+        const card         = this.draggedCard;
+        const cardParentEl = card.element.parentElement;
+
+        const columnPiles = this.tableau.map((arr, i) => ({
+            type: 'column', index: i, arr, el: document.getElementById(`col${i + 1}`)
+        }));
+
+        // non-empty columns first, empty second
+        const hit =
+            columnPiles.find(p => p.el !== cardParentEl && p.arr.length > 0  && this.isValidMove(card, p)) ||
+            columnPiles.find(p => p.el !== cardParentEl && p.arr.length === 0 && this.isValidMove(card, p));
+        return hit?.el || cardParentEl;
+    }
+
+    // Validates and executes a move, then renders and checks for win.
+    // isDrag: true when the card was physically dragged (skip tap animation).
+    attemptMove(targetEl, isDrag = false) {
+        if (!this.draggedCard || !targetEl) return;
+
+        const sourceEl = this.draggedCard.element.parentElement;
+        const destEl   = targetEl.closest('.column')
+                      || targetEl.parentElement?.closest('.column');
+
+        if (!destEl || sourceEl === destEl) {
+            this.draggedCard  = null;
+            this.draggedStack = [];
+            return;
+        }
+
+        const destPile = this.getPileForElement(destEl);
+        if (!destPile) {
+            this.draggedCard  = null;
+            this.draggedStack = [];
+            return;
+        }
+
+        if (this.isValidMove(this.draggedCard, this.draggedStack, destPile)) {
+            this.saveHistory();
+            this.moveCount++;
+            this.updateMovesAndScore();
+
+            // Capture positions BEFORE render for tap animation
+            const cardEls   = this.draggedStack.map(c => c.element);
+            const fromRects = isDrag ? null : cardEls.map(el => el.getBoundingClientRect());
+
+            this.moveCard(sourceEl, destEl, this.draggedCard.id);
+
+            // Clear before render so undo guard is correct from this point on
+            this.draggedCard  = null;
+            this.draggedStack = [];
+
+            this.render();
+
+            if (!isDrag) CardAnimator.animateCards(cardEls, fromRects);
+
+            if (this.checkWin()) this.showWinState();
+        } else {
+            this.draggedCard  = null;
+            this.draggedStack = [];
+        }
+    }
+
+    // Pure model-based move validation.
+    // movingCard: Card, movingStack: Card[], destPile: { type, index, arr }
+    isValidMove(movingCard, destPile) {
+        if (!destPile) return false;
+
+        if (destPile.type === 'column') {
+            if (destPile.arr.length === 0) return true // empty is OK
+            const topCard = destPile.arr[destPile.arr.length - 1];
+            return topCard.value === movingCard.value + 1; // must be one rank higher
+        }
+
+        return false;
+    }
+
+    // Moves Card(s) in the model arrays. DOM is updated separately via renderDOM().
+    moveCard(sourceEl, destEl, cardId) {
+        const sourcePile = this.getPileForElement(sourceEl);
+        const destPile   = this.getPileForElement(destEl);
+        if (!sourcePile || !destPile) return;
+
+        const startIdx = sourcePile.arr.findIndex(c => c.id === cardId);
+        if (startIdx === -1) return;
+
+        // Columns can move a stack
+        const moving = sourcePile.arr.splice(startIdx);
+        destPile.arr.push(...moving);
+    }
+
+    // ─── Auto-move ────────────────────────────────────────────────────────────
+
+    findNextAutoMove() {}
+    runAutoMoves(){} //TODO
+
+    // ─── Event Listeners ──────────────────────────────────────────────────────
+
+    addEventListeners() {
+        this.dragHandler.attach();
+
+        document.addEventListener('click', e => {
+            const button = e.target.closest('.top-button');
+            if (!button) return;
+            switch (button.dataset.action) {
+                case 'undo':     this.undo();             break;
+                case 'settings': this.settingsUI.open();  break;
+            }
+        });
+
+        document.getElementById('middle-btn-new-game').addEventListener('click', () => {
+            this.startGame();
+        });
+
+        // Number bar highlight
+        const numBar = document.querySelector('.number-bar');
+
+        numBar.addEventListener('touchstart', e => {
+            const num = e.target.closest('.num');
+            if (!num) return;
+            e.preventDefault(); // prevent the touch from also firing a click
+            this.highlightCards(num.dataset.value);
+        }, { passive: false });
+
+        numBar.addEventListener('touchend', () => this.clearHighlight());
+
+        numBar.addEventListener('pointerdown', e => {
+            if (e.pointerType === 'touch') return;
+            const num = e.target.closest('.num');
+            if (!num) return;
+            this.highlightCards(num.dataset.value);
+        });
+
+        numBar.addEventListener('pointerup',    e => { if (e.pointerType !== 'touch') this.clearHighlight(); });
+        numBar.addEventListener('pointerleave', e => { if (e.pointerType !== 'touch') this.clearHighlight(); });
+    }
+
+    // ─── Card Highlight and Sequence ───────────────────────────────────────────────────────
+
+    highlightCards(value) {
+        document.querySelectorAll('.card').forEach(el => {
+            const card = el?.cardRef || null;
+            if (!card) return;
+            const matches = card.rank === value;
+            el.classList.toggle('highlighted', matches);
+            el.classList.toggle('dimmed',      !matches);
+        });
+    }
+
+    clearHighlight() {
+        document.querySelectorAll('.card').forEach(el => el.classList.remove('highlighted', 'dimmed'));
+    }
+
+    updateSequenceOutlines() {
+        document.querySelectorAll('.card.seq-top, .card.seq-mid, .card.seq-bot')
+            .forEach(el => el.classList.remove('seq-top', 'seq-mid', 'seq-bot'));
+
+        if (!this.settings.get('showGrouping')) return;
+
+        for (let i = 0; i < 10; i++) {
+            const col = this.tableau[i];
+            if (col.length === 0) continue;
+
+            // Find all sequence boundaries in this column.
+            // A sequence break occurs when the next card is NOT the correct same color
+            // and descending rank from the current card.
+            const breaksBefore = new Set(); // indices where a new sequence starts
+            breaksBefore.add(0);            // first card always starts a sequence
+
+            for (let j = 0; j < col.length - 1; j++) {
+                const curr = col[j];
+                const next = col[j + 1];
+                const isSequence = next.color === curr.color && next.value === curr.value - 1;
+                if (!isSequence) breaksBefore.add(j + 1);
+            }
+
+            // Now assign classes based on where sequences start and end
+            for (let j = 0; j < col.length; j++) {
+                const isStart = breaksBefore.has(j);
+                const isEnd   = breaksBefore.has(j + 1) || j === col.length - 1;
+
+                let cls;
+                if      ( isStart &&  isEnd) cls = null;
+                else if ( isStart && !isEnd) cls = 'seq-top';
+                else if (!isStart &&  isEnd) cls = 'seq-bot';
+                else                         cls = 'seq-mid';
+
+                if (cls) col[j].element.classList.add(cls);
+            }
+        }
+    }
+
+    // ─── History / Undo ───────────────────────────────────────────────────────
+
+    saveHistory() {
+        this.history.push({
+            stock:       this.stock.map(stock => [...stock]),
+            foundations: this.foundations.map(f    => [...f]),
+            tableau:     this.tableau.map(col      => [...col]),
+            movedIds:    this.draggedStack.map(c   => c.id),
+        });
+
+        // 5000 entries ≈ ~5MB max. Far exceeds any realistic game length (52 cards),
+        // while guarding against degenerate cases.
+        if (this.history.length > 5000) this.history.shift();
+    }
+
+    undo() {
+        if (this.draggedCard || this.history.length === 0) return;
+
+        const entry = this.history.pop();
+
+        // Find cards that were auto-moved to foundations after the last player move.
+        // These are cards present in the current foundations but absent in the snapshot.
+        const autoMovedIds = [];
+        for (let i = 0; i < 8; i++) {
+            const savedLen   = entry.foundations[i].length;
+            const currentLen = this.foundations[i].length;
+            for (let j = savedLen; j < currentLen; j++) {
+                autoMovedIds.push(this.foundations[i][j].id);
+            }
+        }
+
+        // Animate both the manually moved cards and any auto-moved cards
+        const allMovedIds = [...new Set([...entry.movedIds, ...autoMovedIds])];
+        const cardEls     = allMovedIds.map(id => this.cardMap[id].element);
+        const fromRects   = cardEls.map(el => el.getBoundingClientRect());
+
+        // Restore model
+        this.stock       = entry.stock;
+        this.foundations = entry.foundations;
+        this.tableau     = entry.tableau;
+
+        // Sync DOM to restored state WITHOUT triggering new auto-moves
+        this.renderDOM();
+        CardAnimator.animateCards(cardEls, fromRects);
+    }
+
     // ─── Score / Moves ────────────────────────────────────────────────────────
 
     updateMovesAndScore() {
@@ -263,39 +572,6 @@ class SpiderGame {
             const score = Math.max(0, 500 - this.moveCount);
             document.getElementById('score').textContent = `Score: ${score}`;
         }
-    }
-
-
-    
-    // ─── Event Listeners ──────────────────────────────────────────────────────
-
-    addEventListeners() {
-        document.addEventListener('click', e => {
-            const button = e.target.closest('.top-button');
-            if (!button) return;
-            switch (button.dataset.action) {
-                case 'undo':     this.undo();              break;
-                case 'settings': this.settingsUI.open();   break;
-            }
-        });
-
-        document.getElementById('middle-btn-new-game').addEventListener('click', () => {
-            this.startGame();
-        });
-    }
-
-    // ─── Undo (stub) ──────────────────────────────────────────────────────────
-
-    undo() {
-        // TODO: implement undo with history stack
-        console.log('Spider: undo');
-    }
-
-    // ─── Sequence outlines ────────────────────────────────
-
-    updateSequenceOutlines() {
-        // TODO: implement sequence outlines
-        console.log('Spider: sequence');
     }
 
     // ─── Service Worker ───────────────────────────────────────────────────────

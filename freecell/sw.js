@@ -1,22 +1,22 @@
-const CACHE_NAME = 'freecell-v0.6.0'; // bump this when deploying updates
+const CACHE_NAME = 'freecell-v0.6.1'; // bump this when deploying updates
 
 const urlsToCache = [
-    '/pwa-cards/freecell/',
-    '/pwa-cards/freecell/index.html',
-    '/pwa-cards/freecell/manifest.json',
-    '/pwa-cards/freecell/appFreecell.js',
-    '/pwa-cards/css/settings.css',
-    '/pwa-cards/css/style.css',
-    '/pwa-cards/js/card.js',
-    '/pwa-cards/js/cardAnimator.js',
-    '/pwa-cards/js/columnLayout.js',
-    '/pwa-cards/js/dragHandler.js',
-    '/pwa-cards/js/gameTimer.js',
-    '/pwa-cards/js/qrcode.min.js',
-    '/pwa-cards/js/setingsManager.js',
-    '/pwa-cards/js/setingsUI.js',
-    '/pwa-cards/js/statsManager.js',
-    '/pwa-cards/js/storageManager.js'
+    './',
+    './index.html',
+    './manifest.json',
+    './appFreecell.js',
+    '../css/settings.css',
+    '../css/style.css',
+    '../js/card.js',
+    '../js/cardAnimator.js',
+    '../js/columnLayout.js',
+    '../js/dragHandler.js',
+    '../js/gameTimer.js',
+    '../js/qrcode.min.js',
+    '../js/settingsManager.js',
+    '../js/settingsUI.js',
+    '../js/statsManager.js',
+    '../js/storageManager.js'
 ];
 
 self.addEventListener('install', event => {
@@ -44,6 +44,8 @@ self.addEventListener('activate', event => {
     );
 });
 
+// Cache-first with background update (Stale-While-Revalidate) - Better
+// uses previous session's cache while downloading updates for next session
 self.addEventListener('fetch', event => {
     // Only handle GET requests — POST etc. always go to network
     if (event.request.method !== 'GET') return;

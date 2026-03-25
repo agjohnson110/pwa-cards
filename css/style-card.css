@@ -77,3 +77,46 @@
         font-size: clamp(8px, 2vh, 18px); /* scalable base */
     }
 }
+
+/* ─── Modifications ──────────────────────────────────────────────────────────────── */
+
+.card.dragging {
+    position: fixed;
+    z-index: 2000;
+    pointer-events: none;
+    will-change: transform;
+    margin: 0;
+}
+
+.card.animating {
+    z-index: 1000;
+}
+
+.card.highlighted {
+    outline: 3px solid gold;
+    box-shadow: 0 0 8px 2px gold;
+}
+
+.card.dimmed {
+    background-color: rgb(189, 189, 189);
+}
+
+.card.seq-top {
+    box-shadow:
+        inset -3px 0px 0px 0px lightblue,   /* left */
+        inset  3px 0px 0px 0px lightblue,   /* right */
+        inset  0px 3px 0px 0px lightblue;  /* top */
+}
+
+.card.seq-mid {
+    box-shadow:
+        inset -3px 0px 0px 0px lightblue,   /* left */
+        inset  3px 0px 0px 0px lightblue;   /* right */
+}
+
+.card.seq-bot {
+    box-shadow:
+        inset -3px 0px 0px 0px lightblue,   /* left */
+        inset  3px 0px 0px 0px lightblue,   /* right */
+        inset  0px -3px 0px 0px lightblue;   /* bottom */
+}
