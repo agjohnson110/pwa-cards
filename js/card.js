@@ -23,15 +23,30 @@ class Card {
     // deckIndex: optional number — pass when using multiple decks so IDs stay unique.
     //            Omit (or pass undefined) for single-deck games.
     constructor(suit, rank, deckIndex = undefined) {
-        this.suit  = suit;
-        this.rank  = rank;
-        this.value = Card.getValue(rank);
-        this.color = (suit === 'hearts' || suit === 'diamonds') ? 'red' : 'black';
-        this.id    = deckIndex !== undefined
+        this.suit     = suit;
+        this.rank     = rank;
+        this.value    = Card.getValue(rank);
+        this.color    = (suit === 'hearts' || suit === 'diamonds') ? 'red' : 'black';
+        this.id       = deckIndex !== undefined
             ? `${suit}-${rank}-${deckIndex}`
             : `${suit}-${rank}`;
+        this.isFaceUp = false; // face down by default — call faceUp() to reveal
 
         this.element = this._createElement();
+    }
+
+    // ─── Face state ───────────────────────────────────────────────────────────
+
+    faceUp() {
+        if (this.isFaceUp) return;
+        this.isFaceUp = true;
+        this.element.classList.remove('face-down');
+    }
+
+    faceDown() {
+        if (!this.isFaceUp) return;
+        this.isFaceUp = false;
+        this.element.classList.add('face-down');
     }
 
     // ─── Static helpers ───────────────────────────────────────────────────────
@@ -75,7 +90,7 @@ class Card {
         const el  = document.createElement('div');
         const sym = this.getSuitSymbol();
 
-        el.className = `card ${this.color}`;
+        el.className = `card ${this.color} face-down`; // face-down by default
         el.dataset.suit   = this.suit;
         el.dataset.rank   = this.rank;
         el.dataset.value  = this.value;

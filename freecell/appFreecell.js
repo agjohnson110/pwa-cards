@@ -1,6 +1,6 @@
 // Freecell Game Logic
 
-const VERSION = '0.6.1';
+const VERSION = '0.6.2';
 
 class FreecellGame {
     constructor() {
@@ -237,6 +237,7 @@ class FreecellGame {
         for (const suit of Card.SUITS) {
             for (const rank of Card.RANKS) {
                 const card = new Card(suit, rank);
+                card.faceUp();
                 this.deck.push(card);
                 this.cardMap[card.id] = card;
             }

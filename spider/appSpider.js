@@ -1,6 +1,6 @@
 // Spider Solitaire
 
-const VERSION = '0.2.0';
+const VERSION = '0.3.0';
 
 const DEBUG = true;
 function log(...args) {
@@ -250,6 +250,7 @@ class SpiderGame {
                 this.tableau[col].push(this.deck.pop());
             }
         }
+        this.revealTopCards();
 
         // to stock
         for (let stockNum = 0; stockNum < 5; stockNum++) {
@@ -259,6 +260,13 @@ class SpiderGame {
         }
 
         this.deck = [];
+    }
+
+    revealTopCards() {
+        for (const col of this.tableau) {
+            if (col.length === 0) continue;
+            col[col.length - 1].faceUp();
+        }
     }
 
     // ─── Rendering ────────────────────────────────────────────────────────────
@@ -281,6 +289,7 @@ class SpiderGame {
             for (const card of this.tableau[i]) col.appendChild(card.element);
         }
 
+        this.revealTopCards();
         this.updateSequenceOutlines();
 
         requestAnimationFrame(() => {
@@ -584,7 +593,18 @@ class SpiderGame {
     highlightCards(value) {
         document.querySelectorAll('.card').forEach(el => {
             const card = el?.cardRef || null;
-            if (!card) return;
+            if (!card || !card.isFaceUp) {  // skip face-down cards
+                el.classList.remove('highlighted', 'dimmed');
+                return;
+            }
+
+            // Skip foundation cards
+            const pile = this.getPileForElement(el.parentElement);
+            if (pile?.type === 'foundation') {
+                el.classList.remove('highlighted', 'dimmed');
+                return;
+            }
+
             const matches = card.rank === value;
             el.classList.toggle('highlighted', matches);
             el.classList.toggle('dimmed',      !matches);
@@ -614,6 +634,13 @@ class SpiderGame {
             for (let j = 0; j < col.length - 1; j++) {
                 const curr = col[j];
                 const next = col[j + 1];
+
+                // Face-down cards are never part of a sequence
+                if (!curr.isFaceUp || !next.isFaceUp) {
+                    breaksBefore.add(j + 1);
+                    continue;
+                }
+
                 const isSequence = next.color === curr.color && next.value === curr.value - 1;
                 if (!isSequence) breaksBefore.add(j + 1);
             }

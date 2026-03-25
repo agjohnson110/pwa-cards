@@ -80,6 +80,18 @@
 
 /* ─── Modifications ──────────────────────────────────────────────────────────────── */
 
+.card.face-down {
+    background-image: url('../images/spider-card-back.png');
+    background-size: cover;
+    background-position: center;
+}
+
+/* Hide the card content when face down */
+.card.face-down .corner,
+.card.face-down .center-suit {
+    visibility: hidden;
+}
+
 .card.dragging {
     position: fixed;
     z-index: 2000;

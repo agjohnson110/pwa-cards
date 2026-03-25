@@ -302,6 +302,16 @@ body {
 .card.red { background-color: white; color: red; }
 .card.black { background-color: white; color: black; }
 
+.card.face-down {
+    background-color: #2c5f8a; /* card back colour */
+}
+
+/* Hide the card content when face down */
+.card.face-down .corner,
+.card.face-down .center-suit {
+    visibility: hidden;
+}
+
 .card.dragging {
     /* opacity: 0.5; */
     position: fixed;
