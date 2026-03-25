@@ -2,6 +2,11 @@
 
 const VERSION = '0.2.0';
 
+const DEBUG = true;
+function log(...args) {
+    if (DEBUG) console.log(...args);
+}
+
 class SpiderGame {
     constructor() {
         // ─── Game state ───────────────────────────────────────────────────────
@@ -160,7 +165,7 @@ class SpiderGame {
         this.shuffleDeck();
         this.dealCards();
         this.renderDOM();
-        console.log('Spider: game started');
+        log('Spider game started');
     }
 
     settingsNewGame() {
@@ -247,8 +252,10 @@ class SpiderGame {
         }
 
         // to stock
-        for (let resupply = 0; resupply < 5; resupply++) {
-            this.stock[resupply].push(this.deck.pop());
+        for (let stockNum = 0; stockNum < 5; stockNum++) {
+            for (let stockCount = 0; stockCount < 10; stockCount++) {
+                this.stock[stockNum].push(this.deck.pop());
+            }
         }
 
         this.deck = [];
@@ -281,6 +288,7 @@ class SpiderGame {
                 this.layout.adjust();
             });
         });
+        log('renderDOM()');
     }
 
     // Full render: syncs DOM then runs animated auto-moves.
@@ -292,6 +300,7 @@ class SpiderGame {
     // Animation
     animateCards(cardEls, fromRects) {
         CardAnimator.animateCards(cardEls, fromRects);
+        log('animateCards()');
     }
 
     // ─── Card Movement and Logic ──────────────────────────────────────────────────────────────
@@ -314,12 +323,19 @@ class SpiderGame {
 
     // Don't start moving a card/stack that is trapped
     preMoveCheckFailed() {
+        log('preMoveCheckFailed()');
+        // Stock and foundation cards are never draggable
+        const sourcePile = this.getPileForElement(this.draggedCard.element.parentElement);
+        if (sourcePile?.type === 'stock') return true;
+        if (sourcePile?.type === 'foundation') return true;
+
         for (let i = 0; i < this.draggedStack.length - 1; i++) {
             const curr = this.draggedStack[i];
             const next = this.draggedStack[i + 1];
             if (next.color !== curr.color)     return true; // different color — not a valid sequence
             if (next.value !== curr.value - 1) return true; // not descending — not a valid sequence
         }
+        log('preMoveCheckFailed(): false - can be moved');
         return false;
     }
 
@@ -342,9 +358,18 @@ class SpiderGame {
     // Validates and executes a move, then renders and checks for win.
     // isDrag: true when the card was physically dragged (skip tap animation).
     attemptMove(targetEl, isDrag = false) {
+        log('attemptMove()');
         if (!this.draggedCard || !targetEl) return;
 
         const sourceEl = this.draggedCard.element.parentElement;
+        const sourcePile = this.getPileForElement(sourceEl);
+        if (sourcePile?.type === 'stock') {
+            this.draggedCard  = null;
+            this.draggedStack = [];
+            this.dealFromStock(sourceEl);
+            return;
+        }
+
         const destEl   = targetEl.closest('.column')
                       || targetEl.parentElement?.closest('.column');
 
@@ -361,7 +386,7 @@ class SpiderGame {
             return;
         }
 
-        if (this.isValidMove(this.draggedCard, this.draggedStack, destPile)) {
+        if (this.isValidMove(this.draggedCard, destPile)) {
             this.saveHistory();
             this.moveCount++;
             this.updateMovesAndScore();
@@ -380,7 +405,6 @@ class SpiderGame {
 
             if (!isDrag) CardAnimator.animateCards(cardEls, fromRects);
 
-            if (this.checkWin()) this.showWinState();
         } else {
             this.draggedCard  = null;
             this.draggedStack = [];
@@ -390,19 +414,25 @@ class SpiderGame {
     // Pure model-based move validation.
     // movingCard: Card, movingStack: Card[], destPile: { type, index, arr }
     isValidMove(movingCard, destPile) {
+        log('isValidMove() to ', destPile.type);
         if (!destPile) return false;
 
         if (destPile.type === 'column') {
-            if (destPile.arr.length === 0) return true // empty is OK
+            if (destPile.arr.length === 0) {
+                log('isValidMove(): true - empty column');
+                return true // empty is OK
+            }
             const topCard = destPile.arr[destPile.arr.length - 1];
+            log('isValidMove(): ', topCard.value, '=?', movingCard.value + 1);
             return topCard.value === movingCard.value + 1; // must be one rank higher
         }
-
+        log('isValidMove(): false - default')
         return false;
     }
 
     // Moves Card(s) in the model arrays. DOM is updated separately via renderDOM().
     moveCard(sourceEl, destEl, cardId) {
+        log('moveCard()');
         const sourcePile = this.getPileForElement(sourceEl);
         const destPile   = this.getPileForElement(destEl);
         if (!sourcePile || !destPile) return;
@@ -417,13 +447,101 @@ class SpiderGame {
 
     // ─── Auto-move ────────────────────────────────────────────────────────────
 
-    findNextAutoMove() {}
-    runAutoMoves(){} //TODO
+    findNextAutoMove() {
+        for (let i = 0; i < 10; i++) {
+            const col = this.tableau[i];
+            if (col.length < 13) continue;
+
+            // Check if the bottom 13 cards form a complete K→A same-suit sequence
+            const seq = col.slice(-13); // last 13 cards
+            const suit = seq[0].suit;
+
+            const isComplete =
+                seq[0].value === 13 && // starts with King
+                seq.every(c => c.suit === suit) && // all same suit
+                seq.every((c, j) => j === 0 || c.value === seq[j - 1].value - 1); // descending
+
+            if (!isComplete) continue;
+
+            // Find an empty foundation
+            const foundationIndex = this.foundations.findIndex(f => f.length === 0);
+            if (foundationIndex === -1) continue; // no empty foundation available
+
+            const foundationEl = document.getElementById(`found${foundationIndex + 1}`);
+            return { colIndex: i, seq, foundationEl };
+        }
+        return null;
+    }
+
+    runAutoMoves() {
+        let next = this.findNextAutoMove();
+        while (next) {
+            const { colIndex, seq, foundationEl } = next;
+            const colEl = document.getElementById(`col${colIndex + 1}`);
+
+            // Capture positions BEFORE the move for animation
+            const cardEls  = seq.map(c => c.element);
+            const fromRects = cardEls.map(el => el.getBoundingClientRect());
+
+            // Move all 13 cards to the foundation in the model
+            this.tableau[colIndex].splice(-13);
+            const foundationPile = this.getPileForElement(foundationEl);
+            foundationPile.arr.push(...seq);
+
+            this.renderDOM();
+
+            // Animate each card to the foundation
+            const toRects = cardEls.map(el => el.getBoundingClientRect());
+            cardEls.forEach((el, i) => {
+                CardAnimator.animateSingleCard(el, fromRects[i], toRects[i]);
+            });
+
+            next = this.findNextAutoMove();
+        }
+
+        // Check win after all auto-moves are complete
+        if (this.checkWin()) this.showWinState();
+    }
+
+    // stock move
+    dealFromStock(stockEl) {
+        const stockPile = this.getPileForElement(stockEl);
+        if (!stockPile || stockPile.type !== 'stock') return;
+        if (stockPile.arr.length === 0) return;
+
+        // Rule: all 10 columns must have at least one card before dealing
+        //if (this.tableau.some(col => col.length === 0)) return;
+
+        // Save history once for the entire deal — undo puts all 10 cards back at once
+        this.saveHistoryForDeal(stockPile.index);
+
+        this.moveCount++;
+        this.updateMovesAndScore();
+
+        // Capture all card positions before the deal for animation
+        const cardEls   = stockPile.arr.map(c => c.element);
+        const fromRects = cardEls.map(el => el.getBoundingClientRect());
+
+        // Deal one card from this stock to each tableau column
+        for (let i = 0; i < 10; i++) {
+            const card = stockPile.arr.pop();
+            this.tableau[i].push(card);
+        }
+
+        this.render();
+        CardAnimator.animateCards(cardEls, fromRects);
+    }
 
     // ─── Event Listeners ──────────────────────────────────────────────────────
 
     addEventListeners() {
         this.dragHandler.attach();
+
+        document.getElementById('multi-stock').addEventListener('click', e => {
+            const stockEl = e.target.closest('.stock');
+            if (!stockEl) return;
+            this.dealFromStock(stockEl);
+        });
 
         document.addEventListener('click', e => {
             const button = e.target.closest('.top-button');
@@ -519,6 +637,7 @@ class SpiderGame {
     // ─── History / Undo ───────────────────────────────────────────────────────
 
     saveHistory() {
+        log('saveHistory()');
         this.history.push({
             stock:       this.stock.map(stock => [...stock]),
             foundations: this.foundations.map(f    => [...f]),
@@ -531,7 +650,19 @@ class SpiderGame {
         if (this.history.length > 5000) this.history.shift();
     }
 
+    saveHistoryForDeal(stockIndex) {
+        const movedIds = this.stock[stockIndex].map(c => c.id);
+        this.history.push({
+            stock:       this.stock.map(s => [...s]),
+            foundations: this.foundations.map(f => [...f]),
+            tableau:     this.tableau.map(col => [...col]),
+            movedIds,
+        });
+        if (this.history.length > 5000) this.history.shift();
+    }
+
     undo() {
+        log('undo()');
         if (this.draggedCard || this.history.length === 0) return;
 
         const entry = this.history.pop();
@@ -565,6 +696,7 @@ class SpiderGame {
     // ─── Score / Moves ────────────────────────────────────────────────────────
 
     updateMovesAndScore() {
+        log('updateMovesAndScore()');
         document.getElementById('moves').textContent = `Moves: ${this.moveCount}`;
         if (this.settings.get('showScore')) {
             // Spider scoring: 500 - (moveCount * 1) as a simple placeholder
