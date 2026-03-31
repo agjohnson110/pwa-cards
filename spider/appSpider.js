@@ -1,6 +1,6 @@
 // Spider Solitaire
 
-const VERSION = '0.3.0';
+const VERSION = '0.3.1';
 
 const DEBUG = true;
 function log(...args) {
@@ -150,9 +150,7 @@ class SpiderGame {
         //this.stats.recordStart(); //probably not needed
         this.timer.start();
 
-        document.getElementById('win-message').style.display         = 'none';
-        document.getElementById('win-stats').style.display           = 'none';
-        document.getElementById('middle-btn-new-game').style.display = 'none';
+        document.getElementById('win-overlay').style.display = 'none';
 
         // ─── Game state reset ───────────────────────────────────────────────────────
         this.deck        = [];
@@ -174,7 +172,17 @@ class SpiderGame {
     }
 
     settingsRestartGame() {
-        // TODO just set board state to beginning - need history
+        if (this.history.length === 0) return;
+
+        const initial    = this.history[0];
+        this.stock       = initial.stock.map(stock => [...stock]);
+        this.foundations = initial.foundations.map(f    => [...f]);
+        this.tableau     = initial.tableau.map(col      => [...col]);
+        this.history     = [];
+        this.moveCount   = 0;
+
+        this.renderDOM();
+        this.runAutoMoves();
     }
 
     checkWin() {
@@ -216,9 +224,7 @@ class SpiderGame {
                 ${row('Streak', s.currentStreak,   s.bestStreak,    flags.isNewBestStreak)}
             </table>`;
 
-        document.getElementById('win-message').style.display         = 'block';
-        document.getElementById('win-stats').style.display           = 'block';
-        document.getElementById('middle-btn-new-game').style.display = 'flex';
+        document.getElementById('win-overlay').style.display = 'flex';
     }
 
     // ─── Deck ─────────────────────────────────────────────────────────────────

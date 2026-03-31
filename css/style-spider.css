@@ -160,6 +160,83 @@ body {
     }
 }
 
+/* ─── Win Overlay ──────────────────────────────────────────────────────── */
+
+#win-overlay {
+    position: fixed;
+    inset: 0;
+    display: flex;           /* toggled to none when hidden */
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    z-index: 500;
+    pointer-events: none;    /* let clicks pass through to the game board... */
+}
+
+#win-overlay > * {
+    pointer-events: auto;    /* ...except the win elements themselves */
+}
+
+#win-message {
+    margin: 0;
+    font-size: 2em;
+    color: white;
+    text-shadow: 0 2px 8px rgba(0,0,0,0.4);
+}
+
+#win-stats {
+    background: rgba(0,0,0,0.45);
+    border-radius: 12px;
+    padding: 10px 18px;
+    color: white;
+    font-size: 14px;
+    text-align: center;
+    white-space: nowrap;
+}
+
+#middle-btn-new-game {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 24px;
+    font-size: 16px;
+    font-weight: 600;
+    background: white;
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    white-space: nowrap;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+}
+
+#win-stats table {
+    border-collapse: collapse;
+}
+
+#win-stats td {
+    padding: 3px 10px;
+}
+
+#win-stats .win-stat-label {
+    text-align: left;
+    opacity: 0.75;
+}
+
+#win-stats .win-stat-this {
+    text-align: right;
+    font-weight: bold;
+}
+
+#win-stats .win-stat-best {
+    text-align: left;
+    opacity: 0.75;
+}
+
+#win-stats .win-stat-best.is-best {
+    color: gold;
+}
+
 /* DEBUG */
 @media (max-width: 10px) {
     .top-button { border: 1px solid red; }

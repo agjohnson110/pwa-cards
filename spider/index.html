@@ -69,12 +69,14 @@
     <button class="top-button undo"     data-action="undo"     aria-label="Undo last move">↺</button>
     <button class="top-button settings" data-action="settings" aria-label="Open settings">⚙</button>
 
-    <div id="win-message" role="alert" aria-live="polite">You Win!</div>
-    <div id="win-stats"></div>
-    <button id="middle-btn-new-game">
-        <span class="action-icon" aria-hidden="true">➕</span>
-        <span>New Game</span>
-    </button>
+    <div id="win-overlay" style="display:none">
+        <div id="win-message" role="alert" aria-live="polite">You Win!</div>
+        <div id="win-stats"></div>
+        <button id="middle-btn-new-game">
+            <span class="action-icon" aria-hidden="true">➕</span>
+            <span>New Game</span>
+        </button>
+    </div>
 
     <!-- Shared scripts — must load before game scripts -->
     <script src="../js/storageManager.js"  defer></script>

@@ -1,6 +1,6 @@
 // Freecell Game Logic
 
-const VERSION = '0.6.2';
+const VERSION = '0.6.3';
 
 class FreecellGame {
     constructor() {
@@ -109,11 +109,10 @@ class FreecellGame {
             `,
             onNewGame: () => {
                 this.stats.recordAbandoned();
-                this.resetGame();
+                this.settingsNewGame();
             },
             onRestart: () => {
-                this.stats.recordAbandoned();
-                this.restartGame();
+                this.settingsRestartGame();
             },
         });
 
@@ -135,29 +134,44 @@ class FreecellGame {
         // ─── Init ────────────────────────────────────────────────────────────
         this.settings.apply();
         this.addEventListeners();
-        this.init();
+        this.registerServiceWorker();
+        this.startGame();
     }
 
-    // ─── Init ─────────────────────────────────────────────────────────────────
+    // ─── Game Lifecycle ───────────────────────────────────────────────────────
 
-    init() {
-        document.getElementById('win-message').style.display          = 'none';
-        document.getElementById('win-stats').style.display            = 'none';
-        document.getElementById('middle-btn-new-game').style.display  = 'none';
+    startGame() {
+        this.gameActive = true;
+        this.moveCount  = 0;
         this.updateMovesAndScore();
+        //this.stats.recordStart(); //probably not needed
+        this.timer.start();
+
+        document.getElementById('win-overlay').style.display = 'none';
+
+        // ─── Game state reset ───────────────────────────────────────────────────────
+        this.deck        = [];
+        this.cardMap     = {};
+        this.freeCells   = [[], [], [], []];
+        this.foundations = [[], [], [], []];
+        this.tableau     = [[], [], [], [], [], [], [], []];
+        this.draggedCard  = null;
+        this.draggedStack = [];
+        this.history     = [];
         this.createDeck();
         this.shuffleDeck();
         this.dealCards();
         this.renderDOM();
         this.runAutoMoves();
-        this.registerServiceWorker();
-        this.stats.recordStart();
-        this.timer.start();
+        log('Freecell game started');
     }
 
-    // ─── Reset / Restart ──────────────────────────────────────────────────────
+    settingsNewGame() {
+        if (this.gameActive) this.stats.recordAbandoned();
+        this.startGame();
+    }
 
-    restartGame() {
+    settingsRestartGame() {
         if (this.history.length === 0) return;
 
         const initial    = this.history[0];
@@ -167,25 +181,8 @@ class FreecellGame {
         this.history     = [];
         this.moveCount   = 0;
 
-        this.timer.start();
         this.renderDOM();
         this.runAutoMoves();
-        this.updateMovesAndScore();
-    }
-
-    resetGame() {
-        this.timer.stop();
-        this.deck        = [];
-        this.cardMap     = {};
-        this.freeCells   = [[], [], [], []];
-        this.foundations = [[], [], [], []];
-        this.tableau     = [[], [], [], [], [], [], [], []];
-        this.draggedCard  = null;
-        this.draggedStack = [];
-        this.history     = [];
-        this.moveCount   = 0;
-        this.gameActive  = false;
-        this.init();
     }
 
     checkWin() {
@@ -226,9 +223,7 @@ class FreecellGame {
                 ${row('Streak', s.currentStreak,   s.bestStreak,    flags.isNewBestStreak)}
             </table>`;
 
-        document.getElementById('win-message').style.display         = 'block';
-        document.getElementById('win-stats').style.display           = 'block';
-        document.getElementById('middle-btn-new-game').style.display = 'flex';
+        document.getElementById('win-overlay').style.display = 'flex';
     }
 
     // ─── Deck ─────────────────────────────────────────────────────────────────
@@ -551,7 +546,7 @@ class FreecellGame {
         });
 
         document.getElementById('middle-btn-new-game').addEventListener('click', () => {
-            this.resetGame();
+            this.startGame();
         });
 
         // Number bar highlight

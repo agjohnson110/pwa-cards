@@ -1,4 +1,4 @@
-const CACHE_NAME = 'freecell-v0.6.2'; // bump this when deploying updates
+const CACHE_NAME = 'freecell-v0.6.3'; // bump this when deploying updates
 
 const urlsToCache = [
     './',

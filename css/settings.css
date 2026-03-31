@@ -39,7 +39,8 @@
     flex-direction: column;
     padding: 0 0 16px 0;
     max-height: 85vh;
-    overflow-y: auto;
+    overflow-y: scroll;
+    -webkit-overflow-scrolling: touch;
 }
 
 .settings-screen.active {
