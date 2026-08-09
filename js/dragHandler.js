@@ -89,6 +89,7 @@ class DragHandler {
         const targetEl = document.elementFromPoint(touch.clientX, touch.clientY)
             ?.closest('.card');
         if (!targetEl) return;
+        log('touchstart', this.getCardFromElement(targetEl).id);
 
         // Prevent double-tap zoom when touching a card.
         // This must be called before _beginPickUp so the event is still cancelable.
@@ -140,6 +141,7 @@ class DragHandler {
             ?.closest('.card');
         if (!targetEl) return;
 
+        log('pointerdown', this.getCardFromElement(targetEl).id);
         this._beginPickUp(targetEl);
 
         try { targetEl.setPointerCapture?.(e.pointerId); } catch {}

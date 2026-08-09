@@ -1,6 +1,6 @@
 // Spider Solitaire
 
-const VERSION = '0.3.1';
+const VERSION = '0.3.2';
 
 const DEBUG = true;
 function log(...args) {
@@ -341,7 +341,11 @@ class SpiderGame {
         log('preMoveCheckFailed()');
         // Stock and foundation cards are never draggable
         const sourcePile = this.getPileForElement(this.draggedCard.element.parentElement);
-        if (sourcePile?.type === 'stock') return true;
+        if (sourcePile?.type === 'stock'){ //trigger stock deal and return true to prevent drag
+            log('preMoveCheckFailed(): true - stock card', this.draggedCard.element.parentElement);
+            this.dealFromStock(this.draggedCard.element.parentElement);
+            return true;
+        }
         if (sourcePile?.type === 'foundation') return true;
 
         for (let i = 0; i < this.draggedStack.length - 1; i++) {
@@ -438,7 +442,7 @@ class SpiderGame {
                 return true // empty is OK
             }
             const topCard = destPile.arr[destPile.arr.length - 1];
-            log('isValidMove(): ', topCard.value, '=?', movingCard.value + 1);
+            log('isValidMove(): ', movingCard.value, "onto a", topCard.value);
             return topCard.value === movingCard.value + 1; // must be one rank higher
         }
         log('isValidMove(): false - default')
@@ -520,6 +524,7 @@ class SpiderGame {
 
     // stock move
     dealFromStock(stockEl) {
+        log('dealFromStock()', stockEl);
         const stockPile = this.getPileForElement(stockEl);
         if (!stockPile || stockPile.type !== 'stock') return;
         if (stockPile.arr.length === 0) return;
@@ -551,12 +556,6 @@ class SpiderGame {
 
     addEventListeners() {
         this.dragHandler.attach();
-
-        document.getElementById('multi-stock').addEventListener('click', e => {
-            const stockEl = e.target.closest('.stock');
-            if (!stockEl) return;
-            this.dealFromStock(stockEl);
-        });
 
         document.addEventListener('click', e => {
             const button = e.target.closest('.top-button');
