@@ -26,6 +26,10 @@
 //   settings.set('darkMode', true);   // saves and re-applies
 //   settings.toggle('darkMode');      // flips, saves, re-applies
 //   settings.apply();                 // re-applies all CSS classes to DOM
+//
+// Non-boolean settings (e.g. a numeric 'difficulty') work the same way via
+// get()/set() — they just don't need (or want) an entry in classMap, since
+// classMap only exists to toggle a CSS class based on a true/false value.
 // ─────────────────────────────────────────────────────────────────────────────
 
 class SettingsManager {

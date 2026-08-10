@@ -10,6 +10,21 @@
 //       settings:     settingsManagerInstance,
 //       stats:        statsManagerInstance,
 //
+//       // Optional: single-select control shown ABOVE the toggle rows.
+//       // Value is compared with ===, so keep option values the same type
+//       // as the setting's default (e.g. numbers, not numeric strings).
+//       // Omit entirely for games that don't have a setting like this
+//       // (e.g. Freecell).
+//       choice: {
+//           key:     'difficulty',
+//           label:   'Difficulty',
+//           options: [
+//               { value: 1, label: 'One Suit'   },
+//               { value: 2, label: 'Two Suits'  },
+//               { value: 4, label: 'Four Suits' },
+//           ],
+//       },
+//
 //       // Toggle rows shown in the main settings screen
 //       // Each entry: { key: 'settingKey', label: 'Display Label' }
 //       toggles: [
@@ -43,6 +58,7 @@ class SettingsUI {
         this.settings   = config.settings;   // SettingsManager instance
         this.stats      = config.stats;       // StatsManager instance
         this.toggles    = config.toggles    || [];
+        this.choice     = config.choice     || null; // optional single-select, e.g. difficulty
         this.statFields = config.statFields || [];
         this.rulesHTML  = config.rulesHTML  || '';
         this.onNewGame  = config.onNewGame  || (() => {});
@@ -98,6 +114,20 @@ class SettingsUI {
     }
 
     _buildMainScreen() {
+        const choiceHTML = this.choice ? `
+            <div class="settings-choice-row">
+                <span class="toggle-label">${this.choice.label}</span>
+                <div class="settings-segmented" data-setting="${this.choice.key}">
+                    ${this.choice.options.map(({ value, label }) => `
+                        <button type="button"
+                                class="segmented-option ${this.settings.get(this.choice.key) === value ? 'active' : ''}"
+                                data-value="${value}">${label}</button>
+                    `).join('')}
+                </div>
+            </div>
+            <div class="settings-divider"></div>
+        ` : '';
+
         const togglesHTML = this.toggles.map(({ key, label }) => `
             <label class="settings-toggle-row">
                 <span class="toggle-label">${label}</span>
@@ -138,6 +168,7 @@ class SettingsUI {
                     </button>
                 </div>
                 <div class="settings-divider"></div>
+                ${choiceHTML}
                 <div class="settings-toggles">
                     ${togglesHTML}
                 </div>
@@ -380,6 +411,22 @@ class SettingsUI {
                 toggle.classList.toggle('on', this.settings.get(key));
             });
         });
+
+        // Choice / segmented control (e.g. difficulty)
+        if (this.choice) {
+            const key = this.choice.key;
+            overlay.querySelectorAll('.segmented-option').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    // Coerce back to the same type as the option value (numbers stay numbers)
+                    const raw   = btn.dataset.value;
+                    const value = this.choice.options.find(o => String(o.value) === raw)?.value ?? raw;
+
+                    this.settings.set(key, value);
+                    overlay.querySelectorAll('.segmented-option')
+                        .forEach(b => b.classList.toggle('active', b === btn));
+                });
+            });
+        }
     }
 
     // ─── QR Code ──────────────────────────────────────────────────────────────

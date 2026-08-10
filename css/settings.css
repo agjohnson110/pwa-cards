@@ -204,6 +204,66 @@
     transform: translateX(18px);
 }
 
+/* ─── Choice Row (segmented control, e.g. Difficulty) ────────────────────────── */
+
+.settings-choice-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 11px 16px;
+}
+
+.settings-segmented {
+    display: flex;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid rgba(0,0,0,0.15);
+    flex-shrink: 0;
+}
+
+.segmented-option {
+    padding: 6px 10px;
+    border: none;
+    background: white;
+    color: #1a1a1a;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    touch-action: manipulation;
+    transition: background 0.1s, color 0.1s;
+}
+
+.segmented-option:not(:last-child) {
+    border-right: 1px solid rgba(0,0,0,0.15);
+}
+
+.segmented-option.active {
+    background: #34c759; /* matches .toggle-switch.on green */
+    color: white;
+}
+
+body.dark-mode .settings-choice-row .toggle-label {
+    color: #f0f0f0;
+}
+
+body.dark-mode .settings-segmented {
+    border-color: rgba(255,255,255,0.15);
+}
+
+body.dark-mode .segmented-option {
+    background: #3a3a3a;
+    color: #f0f0f0;
+}
+
+body.dark-mode .segmented-option:not(:last-child) {
+    border-right-color: rgba(255,255,255,0.15);
+}
+
+body.dark-mode .segmented-option.active {
+    background: #34c759;
+    color: white;
+}
+
 /* ─── Version ────────────────────────────────────────────────────────────────── */
 
 .settings-version {

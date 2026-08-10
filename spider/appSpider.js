@@ -1,6 +1,6 @@
 // Spider Solitaire
 
-const VERSION = '0.4.0';
+const VERSION = '0.5.0';
 
 const DEBUG = true;
 function log(...args) {
@@ -33,7 +33,7 @@ class SpiderGame {
                 showNumberBar: true,
                 showGrouping:  true,
                 darkMode:      false,
-                difficulty:    1,    // 1 = one suit, 2 = two suits, 4 = four suits
+                difficulty:    1,    // 1, 2, 3, 4 = number of suits
             },
             {
                 darkMode:      'dark-mode',
@@ -79,6 +79,16 @@ class SpiderGame {
             version:  VERSION,
             settings: this.settings,
             stats:    this.stats,
+            choice: {
+                key:   'difficulty',
+                label: 'Suits',
+                options: [
+                    { value: 1, label: 'One'   },
+                    { value: 2, label: 'Two'   },
+                    { value: 3, label: 'Three' },
+                    { value: 4, label: 'Four'  },
+                ],
+            },
             toggles: [
                 { key: 'showScore',     label: 'Show Score'              },
                 { key: 'showMoves',     label: 'Show Moves'              },
@@ -109,6 +119,7 @@ class SpiderGame {
                 <h3>Difficulty</h3>
                 <p>One suit: All cards are spades — easiest.<br>
                    Two suits: Cards are spades and hearts.<br>
+                   Three suits: Cards are spades, hearts, and clubs.<br>
                    Four suits: All four suits — hardest.</p>
             `,
             onNewGame: () => {
@@ -229,14 +240,26 @@ class SpiderGame {
     // ─── Deck ─────────────────────────────────────────────────────────────────
 
     createDeck() {
-        const suit = 'spades'; //currently just easy mode
-        for (let index = 0; index < 8; index++) {
+        const numSuits = this.settings.get('difficulty');
+ 
+        let suits;
+        if (numSuits === 2) {
+            suits = ['spades', 'spades', 'spades', 'spades', 'hearts', 'hearts', 'hearts', 'hearts'];
+        } else if (numSuits === 3) {
+            suits = ['spades', 'spades', 'spades', 'hearts', 'hearts', 'hearts', 'clubs', 'clubs'];
+        } else if (numSuits === 4) {
+            suits = ['spades', 'spades', 'hearts', 'hearts', 'clubs', 'clubs', 'diamonds', 'diamonds'];
+        } else { // default to 1 suit
+            suits = ['spades', 'spades', 'spades', 'spades', 'spades', 'spades', 'spades', 'spades'];
+        }
+
+        suits.forEach((suit, index) => {
             for (const rank of Card.RANKS) {
                 const card = new Card(suit, rank, index);
                 this.deck.push(card);
                 this.cardMap[card.id] = card;
             }
-        }
+        });
     }
 
     // Shuffle the deck using Fisher-Yates random algorithm
@@ -355,7 +378,7 @@ class SpiderGame {
         for (let i = 0; i < this.draggedStack.length - 1; i++) {
             const curr = this.draggedStack[i];
             const next = this.draggedStack[i + 1];
-            if (next.color !== curr.color)     return true; // different color — not a valid sequence
+            if (next.suit !== curr.suit)     return true; // different suit — not a valid sequence
             if (next.value !== curr.value - 1) return true; // not descending — not a valid sequence
         }
         log('preMoveCheckFailed(): false - can be moved');
