@@ -41,12 +41,23 @@ class Card {
         if (this.isFaceUp) return;
         this.isFaceUp = true;
         this.element.classList.remove('face-down');
+        this.element.classList.remove('reverted'); // real reveal — no longer just a corner-peek
     }
 
     faceDown() {
         if (!this.isFaceUp) return;
         this.isFaceUp = false;
         this.element.classList.add('face-down');
+    }
+
+    // Like faceDown(), but used specifically when undo flips a card that was
+    // face-up back to face-down. Marks it with 'reverted' so the corners can
+    // stay visible (styled in CSS) even though the card art is hidden again.
+    revertToFaceDown() {
+        const wasFaceUp = this.isFaceUp;
+        this.isFaceUp = false;
+        this.element.classList.add('face-down');
+        if (wasFaceUp) this.element.classList.add('reverted');
     }
 
     // ─── Static helpers ───────────────────────────────────────────────────────

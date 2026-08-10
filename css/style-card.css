@@ -92,6 +92,13 @@
     visibility: hidden;
 }
 
+/* Undo reverted a previously face-up card back to face-down.
+   Keep the card-back image, but leave the rank/suit corners
+   visible so it's clear which card it was. */
+.card.face-down.reverted .corner {
+    visibility: visible;
+}
+
 .card.dragging {
     position: fixed;
     z-index: 2000;

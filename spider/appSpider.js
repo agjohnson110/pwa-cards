@@ -348,7 +348,10 @@ class SpiderGame {
             this.draggedStack = [];
             return true;
         }
+
         if (sourcePile?.type === 'foundation') return true;
+
+        if (this.draggedCard.isFaceUp === false) return true; // face-down cards can't be moved
 
         for (let i = 0; i < this.draggedStack.length - 1; i++) {
             const curr = this.draggedStack[i];
@@ -737,7 +740,7 @@ class SpiderGame {
                 const card = this.cardMap[id];
                 if (!card) continue;
                 if (entry.faceStates[id]) card.faceUp();
-                else card.faceDown();
+                else card.revertToFaceDown();
             }
         }
 
