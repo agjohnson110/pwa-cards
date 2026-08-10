@@ -147,7 +147,6 @@ class SpiderGame {
         this.gameActive = true;
         this.moveCount  = 0;
         this.updateMovesAndScore();
-        //this.stats.recordStart(); //probably not needed
         this.timer.start();
 
         document.getElementById('win-overlay').style.display = 'none';
@@ -629,7 +628,13 @@ class SpiderGame {
         document.querySelectorAll('.card.seq-top, .card.seq-mid, .card.seq-bot')
             .forEach(el => el.classList.remove('seq-top', 'seq-mid', 'seq-bot'));
 
-        if (!this.settings.get('showGrouping')) return;
+        const showGrouping = this.settings.get('showGrouping');
+
+        // Anchor card per column: the card you'd actually pick up to move the
+        // exposed run at the bottom of that column — the seq-top card of the
+        // last sequence, or (when the last card isn't part of a multi-card
+        // run) simply the last card itself. Stays null for empty columns.
+        const columnAnchors = new Array(10).fill(null);
 
         for (let i = 0; i < 10; i++) {
             const col = this.tableau[i];
@@ -656,19 +661,58 @@ class SpiderGame {
             }
 
             // Now assign classes based on where sequences start and end
-            for (let j = 0; j < col.length; j++) {
-                const isStart = breaksBefore.has(j);
-                const isEnd   = breaksBefore.has(j + 1) || j === col.length - 1;
+            if (showGrouping) {
+                for (let j = 0; j < col.length; j++) {
+                    const isStart = breaksBefore.has(j);
+                    const isEnd   = breaksBefore.has(j + 1) || j === col.length - 1;
 
-                let cls;
-                if      ( isStart &&  isEnd) cls = null;
-                else if ( isStart && !isEnd) cls = 'seq-top';
-                else if (!isStart &&  isEnd) cls = 'seq-bot';
-                else                         cls = 'seq-mid';
+                    let cls;
+                    if      ( isStart &&  isEnd) cls = null;
+                    else if ( isStart && !isEnd) cls = 'seq-top';
+                    else if (!isStart &&  isEnd) cls = 'seq-bot';
+                    else                         cls = 'seq-mid';
 
-                if (cls) col[j].element.classList.add(cls);
+                    if (cls) col[j].element.classList.add(cls);
+                }
+            }
+
+            // The run containing the last card starts at the highest break
+            // index — that's our anchor (seq-top card, or the lone last card
+            // when the final run is only one card long).
+            const lastRunStart = Math.max(...breaksBefore);
+            columnAnchors[i]   = col[lastRunStart];
+        }
+
+        this.updateStockHint(columnAnchors);
+    }
+
+    // Highlights the stock when none of the columns' exposed runs have
+    // anywhere to go — i.e. no other column's actual top card (the real
+    // drop target) is the same suit and exactly one rank higher than this
+    // column's anchor card. Acts as a "you're stuck, deal" hint.
+    updateStockHint(columnAnchors) {
+        let hasMove = false;
+
+        outer:
+        for (let i = 0; i < 10; i++) {
+            const anchor = columnAnchors[i];
+            if (!anchor) continue;
+
+            for (let j = 0; j < 10; j++) {
+                if (j === i) continue;
+
+                const destCol = this.tableau[j];
+                if (destCol.length === 0) continue;
+ 
+                const destCard = destCol[destCol.length - 1]; // the card it would actually land on
+                if (destCard.suit === anchor.suit && destCard.value === anchor.value + 1) {
+                    hasMove = true;
+                    break outer;
+                }
             }
         }
+
+        document.getElementById('multi-stock')?.classList.toggle('highlighted', !hasMove);
     }
 
     // ─── History / Undo ───────────────────────────────────────────────────────
@@ -700,6 +744,10 @@ class SpiderGame {
         if (this.history.length > 5000) this.history.shift();
     }
 
+    // Card objects are singletons shared via cardMap — the arrays below only
+    // copy references to them, not the cards themselves. isFaceUp is mutable
+    // state on those shared objects, so it must be snapshotted separately by id,
+    // or a later faceUp()/faceDown() call will silently rewrite "past" history too.
     _captureFaceStates() {
         const faceStates = {};
         for (const id in this.cardMap) {
@@ -735,6 +783,9 @@ class SpiderGame {
         this.foundations = entry.foundations;
         this.tableau     = entry.tableau;
 
+        // Restore each card's face-up/face-down state to match the snapshot.
+        // Cards are shared singletons (cardMap), so isFaceUp must be restored
+        // explicitly — copying the tableau/stock arrays alone doesn't revert it.
         if (entry.faceStates) {
             for (const id in entry.faceStates) {
                 const card = this.cardMap[id];

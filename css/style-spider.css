@@ -54,6 +54,11 @@ body {
     flex-direction: row;
 }
 
+#multi-stock.highlighted {
+    outline: 3px solid gold;
+    box-shadow: 0 0 8px 2px gold;
+}
+
 .foundation, .stock {
     border-radius: 8%;
 }
