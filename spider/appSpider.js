@@ -271,7 +271,7 @@ class SpiderGame {
     revealTopCards() {
         for (const col of this.tableau) {
             if (col.length === 0) continue;
-            col[col.length - 1].faceUp();
+            col[col.length - 1].faceUp(); //reveal the last/top card of each tableau column
         }
     }
 
@@ -344,6 +344,8 @@ class SpiderGame {
         if (sourcePile?.type === 'stock'){ //trigger stock deal and return true to prevent drag
             log('preMoveCheckFailed(): true - stock card', this.draggedCard.element.parentElement);
             this.dealFromStock(this.draggedCard.element.parentElement);
+            this.draggedCard  = null;
+            this.draggedStack = [];
             return true;
         }
         if (sourcePile?.type === 'foundation') return true;
@@ -675,6 +677,7 @@ class SpiderGame {
             foundations: this.foundations.map(f    => [...f]),
             tableau:     this.tableau.map(col      => [...col]),
             movedIds:    this.draggedStack.map(c   => c.id),
+            faceStates:  this._captureFaceStates(),
         });
 
         // 5000 entries ≈ ~5MB max. Far exceeds any realistic game length (52 cards),
@@ -689,8 +692,17 @@ class SpiderGame {
             foundations: this.foundations.map(f => [...f]),
             tableau:     this.tableau.map(col => [...col]),
             movedIds,
+            faceStates:  this._captureFaceStates(),
         });
         if (this.history.length > 5000) this.history.shift();
+    }
+
+    _captureFaceStates() {
+        const faceStates = {};
+        for (const id in this.cardMap) {
+            faceStates[id] = this.cardMap[id].isFaceUp;
+        }
+        return faceStates;
     }
 
     undo() {
@@ -719,6 +731,15 @@ class SpiderGame {
         this.stock       = entry.stock;
         this.foundations = entry.foundations;
         this.tableau     = entry.tableau;
+
+        if (entry.faceStates) {
+            for (const id in entry.faceStates) {
+                const card = this.cardMap[id];
+                if (!card) continue;
+                if (entry.faceStates[id]) card.faceUp();
+                else card.faceDown();
+            }
+        }
 
         // Sync DOM to restored state WITHOUT triggering new auto-moves
         this.renderDOM();
