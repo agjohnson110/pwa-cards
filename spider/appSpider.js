@@ -636,7 +636,7 @@ class SpiderGame {
             if (col.length === 0) continue;
 
             // Find all sequence boundaries in this column.
-            // A sequence break occurs when the next card is NOT the correct same color
+            // A sequence break occurs when the next card is NOT the correct same suit
             // and descending rank from the current card.
             const breaksBefore = new Set(); // indices where a new sequence starts
             breaksBefore.add(0);            // first card always starts a sequence
@@ -651,7 +651,7 @@ class SpiderGame {
                     continue;
                 }
 
-                const isSequence = next.color === curr.color && next.value === curr.value - 1;
+                const isSequence = next.suit === curr.suit && next.value === curr.value - 1;
                 if (!isSequence) breaksBefore.add(j + 1);
             }
 
