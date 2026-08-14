@@ -1,6 +1,11 @@
 // Freecell Game Logic
 
-const VERSION = '0.6.3';
+const VERSION = '0.6.4';
+
+const DEBUG = true;
+function log(...args) {
+    if (DEBUG) console.log(...args);
+}
 
 class FreecellGame {
     constructor() {
